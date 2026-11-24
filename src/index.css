@@ -815,3 +815,65 @@ button {
   border-radius: 8px;
   font-size: 0.9rem;
 }
+
+/* ------------------------- Bienvenida e instalación ------------------------- */
+.welcome {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px 16px;
+  color: #f2f0ea;
+  text-align: center;
+}
+.welcome-brand h1 {
+  font-family: 'Kalam', cursive;
+  font-size: 2.4rem;
+  margin: 8px 0 0;
+}
+.welcome-brand p {
+  margin: 4px 0 0;
+  color: #b9b6c4;
+}
+.welcome-brand img {
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.welcome .modal {
+  text-align: left;
+}
+.welcome-skip {
+  font-size: 0.95rem;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.install-btn {
+  border: 1px solid #6c6878;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2f0ea;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-weight: 700;
+}
+.install-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+.install-tip {
+  margin-top: 8px;
+  max-width: 260px;
+  font-size: 0.85rem;
+  color: #dcd9e6;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 8px 10px;
+  border-radius: 8px;
+}

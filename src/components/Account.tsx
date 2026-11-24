@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { explainError, supabase } from '../lib/supabase';
 import { sync, useSyncStatus } from '../lib/sync';
+import { useInstall } from '../lib/install';
 
 function ago(t?: number) {
   if (!t) return '';
@@ -63,6 +64,7 @@ export function AccountPanel({ session, enabled }: { session: Session | null; en
     setBusy(true);
     setMsg('');
     const ok = await sync.signOutAndClear();
+    if (ok) localStorage.removeItem('nbs-skip-login');
     setBusy(false);
     if (!ok) setMsg('Hay cambios sin subir. Conéctate a internet e inténtalo de nuevo para no perderlos.');
   };
@@ -79,7 +81,7 @@ export function AccountPanel({ session, enabled }: { session: Session | null; en
   );
 }
 
-function LoginDialog({ onClose }: { onClose: () => void }) {
+export function LoginForm({ onDone }: { onDone: () => void }) {
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,7 +101,7 @@ function LoginDialog({ onClose }: { onClose: () => void }) {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        onClose();
+        onDone();
       } else if (mode === 'signup') {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -107,7 +109,7 @@ function LoginDialog({ onClose }: { onClose: () => void }) {
           options: { emailRedirectTo: redirectTo },
         });
         if (error) throw error;
-        if (data.session) onClose();
+        if (data.session) onDone();
         else setInfo('Te enviamos un correo para confirmar la cuenta. Después vuelve e inicia sesión.');
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
@@ -122,8 +124,7 @@ function LoginDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
-      <form className="modal" onSubmit={submit}>
+    <form className="modal" onSubmit={submit}>
         <h2>{mode === 'login' ? 'Iniciar sesión' : mode === 'signup' ? 'Crear cuenta' : 'Recuperar contraseña'}</h2>
         <p className="modal-sub">
           Usa la misma cuenta de tus otras apps. Tus cuadernos se guardan en la nube y los abres desde cualquier
@@ -167,7 +168,41 @@ function LoginDialog({ onClose }: { onClose: () => void }) {
             </button>
           )}
         </div>
-      </form>
+    </form>
+  );
+}
+
+function LoginDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+      <LoginForm onDone={onClose} />
     </div>
   );
+}
+
+/** Botón para instalar la app en el celular o el computador */
+export function InstallButton() {
+  const { canPrompt, installed, ios, install } = useInstall();
+  const [tip, setTip] = useState(false);
+  if (installed) return null;
+  if (canPrompt)
+    return (
+      <button className="install-btn" onClick={install}>
+        Instalar app
+      </button>
+    );
+  if (ios)
+    return (
+      <span className="install-wrap">
+        <button className="install-btn" onClick={() => setTip((t) => !t)}>
+          Instalar app
+        </button>
+        {tip && (
+          <span className="install-tip">
+            En Safari toca <b>Compartir</b> (el cuadro con la flecha) y luego <b>Agregar a pantalla de inicio</b>.
+          </span>
+        )}
+      </span>
+    );
+  return null;
 }

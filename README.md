@@ -2,7 +2,7 @@
 
 Plataforma de cuadernos virtuales para estudiar. Cada cuaderno se ve y se usa como un **cuaderno cuadriculado anillado**: escribes con teclado o a mano con lápiz, pegas imágenes donde quieras y pasas las hojas como en uno de verdad.
 
-## Qué hace hoy (v0.2)
+## Qué hace hoy (v0.3)
 
 - **Biblioteca de cuadernos** con portada de color y nombre.
 - **Hoja cuadriculada** con perforaciones y espiral metálica.
@@ -14,6 +14,10 @@ Plataforma de cuadernos virtuales para estudiar. Cada cuaderno se ve y se usa co
   - Si se detecta un lápiz, se ignora el toque de la palma al dibujar.
 - **Imágenes**: Ctrl+V, arrastrar y soltar, o botón de imagen. Se pueden mover y redimensionar con la herramienta de selección. Las fotos grandes se comprimen automáticamente.
 - **Guardado automático y sin conexión** en el navegador (IndexedDB). Al volver, el cuaderno se abre en la última hoja.
+- **App instalable (PWA)**: se instala en el celular, la tablet o el computador con su propio ícono, abre en pantalla completa y funciona sin internet.
+  - Android, o Chrome/Edge en el computador: botón **Instalar app** en la pantalla principal.
+  - iPhone/iPad: en Safari toca **Compartir → Agregar a pantalla de inicio**.
+- **Pantalla de inicio de sesión** al abrir la app, con la opción de continuar sin cuenta.
 - **Sincronización entre dispositivos** con Supabase: inicias sesión con la **misma cuenta de tus otras apps** y tus cuadernos aparecen en el computador, la tablet y el celular. Sin conexión sigues trabajando y todo se sube al volver la conexión.
 
 ## Tecnologías
@@ -101,7 +105,7 @@ Las coordenadas son de página (816 × 1056, proporción carta), así que el con
 ## Hoja de ruta
 
 1. ~~Sincronización entre dispositivos~~ ✅. Siguiente: Realtime, para ver los cambios de otro dispositivo al instante sin esperar los 20 s.
-2. **PWA instalable**: manifest, service worker y uso completo sin conexión.
+2. ~~PWA instalable~~ ✅
 3. **Zoom y desplazamiento** con pellizco (clave en celular) y vista de dos páginas en pantallas anchas.
 4. Formato de texto (negrita, listas, títulos), herramienta lazo para mover trazos y deshacer/rehacer.
 5. Tipos de hoja (rayada, punteada, blanca), separadores, índice y búsqueda.

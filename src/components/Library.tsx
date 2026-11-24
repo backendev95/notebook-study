@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Session } from '@supabase/supabase-js';
 import { createNotebook, db, now } from '../db';
-import { AccountPanel } from './Account';
+import { AccountPanel, InstallButton } from './Account';
 
 const COVER_COLORS = ['#2f5d8a', '#b8433a', '#2f7a55', '#6b4a9e', '#d9902f', '#33363f', '#c2577f'];
 
@@ -42,7 +42,10 @@ export function Library({
           <h1>Mis cuadernos</h1>
           <p>Toca un cuaderno para abrirlo. Escribe, dibuja y pega imágenes donde quieras.</p>
         </div>
-        <AccountPanel session={session} enabled={syncEnabled} />
+        <div className="header-actions">
+          <InstallButton />
+          <AccountPanel session={session} enabled={syncEnabled} />
+        </div>
       </header>
 
       <div className="shelf">
