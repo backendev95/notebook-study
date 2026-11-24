@@ -98,9 +98,9 @@ const mainTools: [Tool, string][] = [
 ];
 
 const hints: Partial<Record<Tool, string>> = {
-  sticky: 'Toca la hoja para pegar la nota',
-  math: 'Toca la hoja donde va la fórmula',
-  card: 'Toca la hoja para crear la tarjeta',
+  sticky: 'Toca la página para pegar la nota',
+  math: 'Toca la página donde va la fórmula',
+  card: 'Toca la página para crear la tarjeta',
   lasso: 'Encierra lo que quieras mover',
 };
 
@@ -197,7 +197,7 @@ export function Toolbar(p: ToolbarProps) {
                   Tarjeta de repaso
                 </MenuItem>
                 <MenuItem icon={icons.pdf} onClick={() => (pdfRef.current?.click(), close())}>
-                  PDF como hojas
+                  PDF como páginas
                 </MenuItem>
               </>
             )}
@@ -249,7 +249,7 @@ export function Toolbar(p: ToolbarProps) {
           </button>
         </div>
 
-        <button className="tb-btn" onClick={p.onPages} title="Hojas e índice" aria-label="Hojas e índice">
+        <button className="tb-btn" onClick={p.onPages} title="Páginas e índice" aria-label="Páginas e índice">
           {icons.pages}
         </button>
         <button className="tb-btn" onClick={p.onSearch} title="Buscar (Ctrl+F)" aria-label="Buscar">
@@ -266,21 +266,21 @@ export function Toolbar(p: ToolbarProps) {
                 Automática
               </MenuItem>
               <MenuItem active={p.view === 'single'} onClick={() => (p.onView('single'), close())}>
-                Una hoja
+                Una página
               </MenuItem>
               <MenuItem active={p.view === 'spread'} onClick={() => (p.onView('spread'), close())}>
-                Dos hojas (cuaderno abierto)
+                Dos páginas (cuaderno abierto)
               </MenuItem>
             </>
           )}
         </Menu>
         <SyncBadge compact />
         <div className="tb-group pager">
-          <button className="tb-btn" onClick={p.onPrev} disabled={!p.canPrev} title="Hoja anterior (←)" aria-label="Hoja anterior">
+          <button className="tb-btn" onClick={p.onPrev} disabled={!p.canPrev} title="Página anterior (←)" aria-label="Página anterior">
             {icons.prev}
           </button>
           <span className="page-label">{p.pageLabel}</span>
-          <button className="tb-btn" onClick={p.onNext} title="Hoja siguiente (→)" aria-label="Hoja siguiente">
+          <button className="tb-btn" onClick={p.onNext} title="Página siguiente (→)" aria-label="Página siguiente">
             {icons.next}
           </button>
         </div>

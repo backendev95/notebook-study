@@ -98,7 +98,7 @@ export function Library({
               {!n.coverAssetId && <span className="mini-label">{n.title}</span>}
             </button>
             <div className="shelf-meta">
-              <span>{pageCounts?.[n.id] ?? 0} hojas</span>
+              <span>{pageCounts?.[n.id] ?? 0} páginas</span>
               {confirmDelete === n.id ? (
                 <span className="confirm">
                   ¿Eliminar?{' '}
@@ -114,7 +114,7 @@ export function Library({
                   {(close) => (
                     <>
                       <MenuItem onClick={() => (onOpen(n.id), close())}>Abrir</MenuItem>
-                      <MenuItem onClick={() => (setEditing(n), close())}>Ajustes (nombre, portada, hoja)</MenuItem>
+                      <MenuItem onClick={() => (setEditing(n), close())}>Ajustes (nombre, portada, tipo de hoja)</MenuItem>
                       <MenuItem danger onClick={() => (setConfirmDelete(n.id), close())}>
                         Eliminar
                       </MenuItem>

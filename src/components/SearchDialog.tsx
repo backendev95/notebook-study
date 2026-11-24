@@ -54,7 +54,7 @@ export function SearchDialog({
             <button key={i} className="search-hit" onClick={() => onPick(h)}>
               <span className="hit-where">
                 {scope === 'all' && <b>{h.notebookTitle} · </b>}
-                {h.page < 0 ? 'Portada' : `Hoja ${h.page + 1}`} · {h.kind}
+                {h.page < 0 ? 'Portada' : `Página ${h.page + 1}`} · {h.kind}
               </span>
               <span className="hit-snippet">
                 {h.snippet.slice(0, h.start)}

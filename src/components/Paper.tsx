@@ -45,7 +45,7 @@ export function Cover({ notebook, pageCount }: { notebook: Notebook; pageCount: 
             <div className="cover-brand">Notebook Study</div>
             <div className="cover-title">{notebook.title}</div>
             <div className="cover-meta">
-              {pageCount} {pageCount === 1 ? 'hoja' : 'hojas'}
+              {pageCount} {pageCount === 1 ? 'página' : 'páginas'}
             </div>
           </div>
           <div className="cover-hint">Arrastra la esquina para abrir →</div>

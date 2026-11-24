@@ -73,14 +73,14 @@ export function ExportDialog({
         <h2>Exportar a PDF</h2>
         <div className="radio-list">
           <label>
-            <input type="radio" checked={which === 'all'} onChange={() => setWhich('all')} /> Todo el cuaderno ({pages.length} hojas)
+            <input type="radio" checked={which === 'all'} onChange={() => setWhich('all')} /> Todo el cuaderno ({pages.length} páginas)
           </label>
           <label>
             <input type="radio" checked={which === 'current'} onChange={() => setWhich('current')} disabled={activePage < 0} /> Solo
-            la hoja actual
+            la página actual
           </label>
           <label>
-            <input type="radio" checked={which === 'range'} onChange={() => setWhich('range')} /> Hojas:
+            <input type="radio" checked={which === 'range'} onChange={() => setWhich('range')} /> Páginas:
             <input className="range-input" value={range} onChange={(e) => (setRange(e.target.value), setWhich('range'))} placeholder="1-3, 5" />
           </label>
           <label>
@@ -92,7 +92,7 @@ export function ExportDialog({
           <div className="progress">
             <div style={{ width: `${(progress[0] / progress[1]) * 100}%` }} />
             <span>
-              Hoja {progress[0]} de {progress[1]}
+              Página {progress[0]} de {progress[1]}
             </span>
           </div>
         )}

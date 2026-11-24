@@ -83,7 +83,7 @@ export function NotebookSettings({ notebook, onClose }: { notebook: Notebook; on
           </div>
         </div>
         <div className="field">
-          <span className="field-label">Tipo de hoja (para las hojas que no tengan uno propio)</span>
+          <span className="field-label">Tipo de hoja (para las páginas que no tengan uno propio)</span>
           <div className="paper-row">
             {(Object.keys(PAPER_LABELS) as PaperType[]).map((p) => (
               <button key={p} type="button" className={`paper-opt${paper === p ? ' active' : ''}`} onClick={() => setPaper(p)}>

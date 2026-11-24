@@ -47,7 +47,7 @@ export function PagesPanel({
     <div className="drawer-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="drawer" onKeyDown={(e) => e.stopPropagation()}>
         <header className="drawer-head">
-          <h2>Hojas</h2>
+          <h2>Páginas</h2>
           <button className="tb-btn" onClick={onClose} title="Cerrar">
             ✕
           </button>
@@ -62,14 +62,14 @@ export function PagesPanel({
                   <button onClick={() => onGo(i)}>
                     <span className="index-dot" style={{ background: p.sectionColor ?? '#8a8f98' }} />
                     <span className="index-title">{p.sectionTitle}</span>
-                    <span className="index-page">hoja {i + 1}</span>
+                    <span className="index-page">pág. {i + 1}</span>
                   </button>
                 </li>
               ))}
             </ul>
           ) : (
             <p className="muted-text">
-              Aún no hay separadores. Usa ⋯ → <b>Separador</b> en una hoja para empezar una sección (por ejemplo
+              Aún no hay separadores. Usa ⋯ → <b>Separador</b> en una página para empezar una sección (por ejemplo
               "Unidad 1").
             </p>
           )}
@@ -77,7 +77,7 @@ export function PagesPanel({
 
         <div className="drawer-actions">
           <button className="secondary" onClick={() => insertPageAfter(notebook.id, pages.length - 1).then(() => onGo(pages.length))}>
-            + Hoja al final
+            + Página al final
           </button>
           <button className="secondary" onClick={() => onImportPdf(Math.max(-1, activePage))}>
             Importar PDF aquí
@@ -94,17 +94,17 @@ export function PagesPanel({
                     {p.sectionTitle}
                   </div>
                 )}
-                <button className="thumb-go" onClick={() => onGo(i)} title={`Ir a la hoja ${i + 1}`}>
+                <button className="thumb-go" onClick={() => onGo(i)} title={`Ir a la página ${i + 1}`}>
                   <Thumb page={p} n={i + 1} paper={paper} settings={settings} />
                 </button>
                 <div className="thumb-bar">
-                  <span>Hoja {i + 1}</span>
-                  <Menu button={<span className="dots">⋯</span>} title={`Opciones de la hoja ${i + 1}`}>
+                  <span>Página {i + 1}</span>
+                  <Menu button={<span className="dots">⋯</span>} title={`Opciones de la página ${i + 1}`}>
                     {(close) => (
                       <>
-                        <MenuItem onClick={() => (onGo(i), close())}>Ir a esta hoja</MenuItem>
-                        <MenuItem onClick={() => (insertPageAfter(notebook.id, i - 1), close())}>Insertar hoja antes</MenuItem>
-                        <MenuItem onClick={() => (insertPageAfter(notebook.id, i), close())}>Insertar hoja después</MenuItem>
+                        <MenuItem onClick={() => (onGo(i), close())}>Ir a esta página</MenuItem>
+                        <MenuItem onClick={() => (insertPageAfter(notebook.id, i - 1), close())}>Insertar página antes</MenuItem>
+                        <MenuItem onClick={() => (insertPageAfter(notebook.id, i), close())}>Insertar página después</MenuItem>
                         <MenuItem onClick={() => (duplicatePage(notebook.id, i), close())}>Duplicar</MenuItem>
                         {i > 0 && <MenuItem onClick={() => (movePage(notebook.id, i, -1), close())}>Mover antes</MenuItem>}
                         {i < pages.length - 1 && (
@@ -136,7 +136,7 @@ export function PagesPanel({
                         <MenuItem onClick={() => (onImportPdf(i), close())}>Importar PDF después de esta</MenuItem>
                         {pages.length > 1 && (
                           <MenuItem danger onClick={() => (setConfirmDelete(i), close())}>
-                            Eliminar hoja
+                            Eliminar página
                           </MenuItem>
                         )}
                       </>
@@ -145,7 +145,7 @@ export function PagesPanel({
                 </div>
                 {confirmDelete === i && (
                   <div className="thumb-confirm">
-                    <span>¿Eliminar la hoja {i + 1} y todo lo que tiene?</span>
+                    <span>¿Eliminar la página {i + 1} y todo lo que tiene?</span>
                     <button className="danger-btn" onClick={() => (deletePage(p.id), setConfirmDelete(null))}>
                       Eliminar
                     </button>

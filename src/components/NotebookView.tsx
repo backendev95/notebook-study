@@ -557,8 +557,8 @@ export function NotebookView({
     s === -1
       ? 'Portada'
       : mode === 'single' || s === 0
-        ? `Hoja ${rightPage(s, mode) + 1} de ${n}`
-        : `Hojas ${2 * s}–${Math.min(n, 2 * s + 1)} de ${n}`;
+        ? `Página ${rightPage(s, mode) + 1} de ${n}`
+        : `Páginas ${2 * s}–${Math.min(n, 2 * s + 1)} de ${n}`;
 
   return (
     <div className="notebook-view">

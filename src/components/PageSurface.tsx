@@ -816,7 +816,7 @@ export const PageSurface = memo(function PageSurface({
     selActions.push({ label: 'Duplicar', title: 'Duplicar (Ctrl+D)', onClick: duplicate });
     selActions.push({
       label: 'Copiar',
-      title: 'Copiar para pegar en otra hoja (Ctrl+C)',
+      title: 'Copiar para pegar en otra página (Ctrl+C)',
       onClick: () => copyToClip(elementsRef.current.filter((x) => selected.includes(x.id))),
     });
     selActions.push({

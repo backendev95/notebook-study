@@ -92,7 +92,7 @@ export function Review({ notebookId, onExit }: { notebookId?: string; onExit: ()
         <div className="review-empty">
           <h2>Aún no tienes tarjetas</h2>
           <p>
-            En una hoja usa <b>Insertar → Tarjeta de repaso</b> y escribe una pregunta y su respuesta. Después vuelve aquí
+            En una página usa <b>Insertar → Tarjeta de repaso</b> y escribe una pregunta y su respuesta. Después vuelve aquí
             para repasar.
           </p>
         </div>
@@ -111,7 +111,7 @@ export function Review({ notebookId, onExit }: { notebookId?: string; onExit: ()
       {current && html && (
         <div className="review-stage">
           <div className="review-where">
-            {current.notebookTitle} · hoja {current.page + 1}
+            {current.notebookTitle} · página {current.page + 1}
           </div>
           <div className={`review-card${showAnswer ? ' flipped' : ''}`} onClick={() => setShowAnswer(true)}>
             <div className="review-face front">
