@@ -1,6 +1,7 @@
 import { addElement, db, imageSize, nextZ, now, saveAsset, uid } from '../db';
 import { MARGIN_LEFT, PAGE_H, PAGE_W } from '../types';
 import { useEffect, useState } from 'react';
+import { sync } from './sync';
 
 const MAX_SIDE = 1800;
 
@@ -59,12 +60,20 @@ export function useAssetUrl(assetId: string) {
       return;
     }
     let alive = true;
-    db.assets.get(assetId).then((a) => {
-      if (!a || !alive) return;
+    const load = async (retry: boolean) => {
+      const a = await db.assets.get(assetId);
+      if (!alive) return;
+      if (!a) {
+        // la imagen se pegó en otro dispositivo: la bajamos de la nube
+        if (retry) await sync.fetchAsset(assetId).catch(() => undefined);
+        if (retry) load(false);
+        return;
+      }
       const u = URL.createObjectURL(a.blob);
       urlCache.set(assetId, u);
       setUrl(u);
-    });
+    };
+    load(true);
     return () => {
       alive = false;
     };

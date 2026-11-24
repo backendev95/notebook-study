@@ -1,10 +1,20 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import type { Session } from '@supabase/supabase-js';
 import { createNotebook, db, now } from '../db';
+import { AccountPanel } from './Account';
 
 const COVER_COLORS = ['#2f5d8a', '#b8433a', '#2f7a55', '#6b4a9e', '#d9902f', '#33363f', '#c2577f'];
 
-export function Library({ onOpen }: { onOpen: (id: string) => void }) {
+export function Library({
+  onOpen,
+  session,
+  syncEnabled,
+}: {
+  onOpen: (id: string) => void;
+  session: Session | null;
+  syncEnabled: boolean;
+}) {
   const notebooks = useLiveQuery(async () =>
     (await db.notebooks.toArray()).filter((n) => !n.deleted).sort((a, b) => b.updatedAt - a.updatedAt),
   );
@@ -28,8 +38,11 @@ export function Library({ onOpen }: { onOpen: (id: string) => void }) {
   return (
     <div className="library">
       <header className="library-header">
-        <h1>Mis cuadernos</h1>
-        <p>Toca un cuaderno para abrirlo. Escribe, dibuja y pega imágenes donde quieras.</p>
+        <div>
+          <h1>Mis cuadernos</h1>
+          <p>Toca un cuaderno para abrirlo. Escribe, dibuja y pega imágenes donde quieras.</p>
+        </div>
+        <AccountPanel session={session} enabled={syncEnabled} />
       </header>
 
       <div className="shelf">

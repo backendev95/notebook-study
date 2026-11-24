@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from 'react';
 import type { Tool } from '../types';
 import type { PenSettings } from './PageSurface';
+import { SyncBadge } from './Account';
 
 const INK_COLORS = ['#1f2430', '#2456c9', '#d23b3b', '#1f8a4c', '#7b3fc4'];
 const MARKER_COLORS = ['#ffd84a', '#8be38b', '#ff9ccf', '#7fd3ff'];
@@ -111,6 +112,7 @@ export function Toolbar(p: Props) {
       )}
 
       <div className="tb-spacer" />
+      <SyncBadge compact />
       <div className="tb-group pager">
         <button className="tb-btn" onClick={p.onPrev} disabled={!p.canPrev} title="Hoja anterior (←)">
           <svg viewBox="0 0 24 24">

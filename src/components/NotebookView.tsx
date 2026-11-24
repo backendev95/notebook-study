@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { addPageAtEnd, db, getPages } from '../db';
+import { addPageAtEnd, db, getLastPage, getPages, setLastPage } from '../db';
 import { insertImage } from '../lib/images';
 import { MARGIN_LEFT, PAGE_H, PAGE_W, type Page } from '../types';
 import { BackPaper, Cover, CoverInside, Rings } from './Paper';
@@ -60,10 +60,10 @@ export function NotebookView({ notebookId, onBack }: { notebookId: string; onBac
 
   // Hoja inicial: donde lo dejaste la última vez
   useEffect(() => {
-    if (notebook && pages && cur === null) setCur(Math.min(notebook.lastPage ?? -1, pages.length - 1));
-  }, [notebook, pages, cur]);
+    if (notebook && pages && cur === null) setCur(Math.min(getLastPage(notebookId), pages.length - 1));
+  }, [notebook, pages, cur, notebookId]);
   useEffect(() => {
-    if (cur !== null) db.notebooks.update(notebookId, { lastPage: cur });
+    if (cur !== null) setLastPage(notebookId, cur);
   }, [cur, notebookId]);
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));

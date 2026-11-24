@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { addElement, db, deleteElement, nextZ, now, uid, updateElement } from '../db';
+import { addElement, db, deleteElement, now, uid, updateElement } from '../db';
 import { inkBounds, inkPath } from '../lib/ink';
 import { insertImage, useAssetUrl } from '../lib/images';
 import {
@@ -43,6 +43,9 @@ type Gesture = {
   moved: boolean;
 };
 
+// Textos que se están guardando todavía (para no editarlos antes de que existan)
+const creating = new Map<string, Promise<void>>();
+
 // Si alguna vez se usó un lápiz, ignoramos el toque con la palma/dedo al dibujar
 let penSeen = false;
 
@@ -62,6 +65,7 @@ export const PageSurface = memo(function PageSurface({ pageId, pageNumber, edita
   const [editingId, setEditingId] = useState<string | null>(null);
   const [override, setOverride] = useState<Box | null>(null);
   const [live, setLive] = useState<InkElement | null>(null);
+  const [pendingText, setPendingText] = useState<TextElement | null>(null);
   const liveRef = useRef<InkElement | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const erasing = useRef(false);
@@ -85,11 +89,12 @@ export const PageSurface = memo(function PageSurface({ pageId, pageNumber, edita
   // Quitar el trazo "en vivo" / la posición temporal cuando la base de datos ya tiene el cambio
   useEffect(() => {
     if (live && !liveRef.current && elements.some((e) => e.id === live.id)) setLive(null);
+    if (pendingText && elements.some((e) => e.id === pendingText.id)) setPendingText(null);
     if (override && !gesture.current) {
       const el = elements.find((e) => e.id === override.id);
       if (!el || (el.x === override.x && el.y === override.y && el.w === override.w)) setOverride(null);
     }
-  }, [elements, live, override]);
+  }, [elements, live, override, pendingText]);
 
   // Suprimir / Escape
   useEffect(() => {
@@ -185,13 +190,15 @@ export const PageSurface = memo(function PageSurface({ pageId, pageNumber, edita
         y: clamp(Math.floor(p.y / GRID) * GRID, 0, PAGE_H - GRID * 2),
         w: Math.min(360, PAGE_W - clamp(p.x - 6, MARGIN_LEFT + 4, PAGE_W - 160) - 16),
         h: GRID,
-        z: await nextZ(pageId),
+        z: elementsRef.current.reduce((m, x) => Math.max(m, x.z), 0) + 1,
         updatedAt: now(),
         html: '',
         color: settings.textColor,
       };
-      await addElement(el);
+      // se muestra y enfoca al instante; se guarda en segundo plano
+      setPendingText(el);
       setEditingId(el.id);
+      creating.set(el.id, addElement(el).finally(() => creating.delete(el.id)));
       return;
     }
 
@@ -300,7 +307,11 @@ export const PageSurface = memo(function PageSurface({ pageId, pageNumber, edita
     [elements],
   );
   const inks = useMemo(() => elements.filter((e): e is InkElement => e.type === 'ink'), [elements]);
-  const texts = useMemo(() => elements.filter((e): e is TextElement => e.type === 'text'), [elements]);
+  const texts = useMemo(() => {
+    const list = elements.filter((e): e is TextElement => e.type === 'text');
+    if (pendingText && !list.some((t) => t.id === pendingText.id)) list.push(pendingText);
+    return list;
+  }, [elements, pendingText]);
 
   return (
     <div
@@ -330,7 +341,10 @@ export const PageSurface = memo(function PageSurface({ pageId, pageNumber, edita
           el={view(el) as TextElement}
           editing={editingId === el.id}
           selected={selectedId === el.id}
-          onDone={() => setEditingId((cur) => (cur === el.id ? null : cur))}
+          onDone={() => {
+            setEditingId((cur) => (cur === el.id ? null : cur));
+            setPendingText((p) => (p?.id === el.id ? null : p));
+          }}
         />
       ))}
       <div className="page-number">{pageNumber}</div>
@@ -377,9 +391,14 @@ function TextBox({
   onDone: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const unsaved = useRef(false); // hay texto escrito que todavía no se guardó
+  const wasEditing = useRef(editing);
 
+  // Mostrar el contenido guardado (por ejemplo, el que llega de otro dispositivo),
+  // pero nunca encima de algo que se está escribiendo y aún no se guarda
   useEffect(() => {
-    if (ref.current && !editing && ref.current.innerHTML !== el.html) ref.current.innerHTML = el.html;
+    if (ref.current && !editing && !unsaved.current && ref.current.innerHTML !== el.html)
+      ref.current.innerHTML = el.html;
   }, [el.html, editing]);
 
   useEffect(() => {
@@ -397,11 +416,22 @@ function TextBox({
   const finish = async () => {
     const node = ref.current;
     if (!node) return;
+    // leer el contenido antes de cualquier espera
+    const html = node.innerHTML;
     const text = node.innerText.trim();
-    if (!text) await db.elements.delete(el.id);
-    else if (node.innerHTML !== el.html) await updateElement(el.id, { html: node.innerHTML, h: node.offsetHeight });
+    const h = node.offsetHeight;
+    await creating.get(el.id);
+    if (!text) await deleteElement(el.id);
+    else if (html !== el.html) await updateElement(el.id, { html, h });
+    unsaved.current = false;
     onDone();
   };
+
+  // Si se deja de editar sin perder el foco (por ejemplo, al crear otra caja), guardar igual
+  useEffect(() => {
+    if (wasEditing.current && !editing) finish();
+    wasEditing.current = editing;
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onPaste = (e: React.ClipboardEvent) => {
     // las imágenes las maneja el cuaderno; aquí solo texto plano
@@ -425,6 +455,7 @@ function TextBox({
         suppressContentEditableWarning
         spellCheck={editing}
         onBlur={finish}
+        onInput={() => (unsaved.current = true)}
         onPaste={onPaste}
         onKeyDown={(e) => {
           if (e.key === 'Escape') (e.target as HTMLElement).blur();

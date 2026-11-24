@@ -8,8 +8,9 @@ export interface Notebook {
   color: string; // color de la portada
   createdAt: number;
   updatedAt: number;
-  lastPage: number; // -1 = portada
+  lastPage?: number; // obsoleto: ahora se guarda en localStorage
   deleted?: boolean;
+  dirty?: number;
 }
 
 export interface Page {
@@ -18,6 +19,7 @@ export interface Page {
   order: number; // posición de la hoja dentro del cuaderno
   updatedAt: number;
   deleted?: boolean;
+  dirty?: number;
 }
 
 interface BaseElement {
@@ -30,6 +32,7 @@ interface BaseElement {
   z: number;
   updatedAt: number;
   deleted?: boolean;
+  dirty?: number;
 }
 
 export interface TextElement extends BaseElement {
@@ -59,6 +62,7 @@ export interface Asset {
   blob: Blob;
   mime: string;
   updatedAt: number;
+  dirty?: number;
 }
 
 export type Tool = 'select' | 'text' | 'pen' | 'marker' | 'eraser';
