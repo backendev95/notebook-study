@@ -72,6 +72,8 @@ interface Props {
   bind?: 'left' | 'right';
   highlightId?: string;
   onActivate?: () => void;
+  /** cambiar la herramienta a "Seleccionar y mover" */
+  onSelectTool?: () => void;
 }
 
 // ---------- Portapapeles interno (copiar / pegar elementos) ----------
@@ -140,6 +142,7 @@ export const PageSurface = memo(function PageSurface({
   bind = 'left',
   highlightId,
   onActivate,
+  onSelectTool,
 }: Props) {
   const { tool } = settings;
   const elements =
@@ -152,7 +155,7 @@ export const PageSurface = memo(function PageSurface({
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [pendingBox, setPendingBox] = useState<TextElement | StickyElement | null>(null);
+  const [pendingBoxes, setPendingBoxes] = useState<(TextElement | StickyElement)[]>([]);
   const [live, setLive] = useState<InkElement | null>(null);
   const [lasso, setLasso] = useState<Pt[] | null>(null);
   const [xf, setXf] = useState<Transform | null>(null);
@@ -220,7 +223,8 @@ export const PageSurface = memo(function PageSurface({
   // limpiar estados temporales cuando la base de datos ya refleja el cambio
   useEffect(() => {
     if (live && !liveRef.current && elements.some((e) => e.id === live.id)) setLive(null);
-    if (pendingBox && elements.some((e) => e.id === pendingBox.id)) setPendingBox(null);
+    if (pendingBoxes.some((p) => elements.some((e) => e.id === p.id)))
+      setPendingBoxes((ps) => ps.filter((p) => !elements.some((e) => e.id === p.id)));
     if (optimistic) {
       const done = [...optimistic.values()].every((o) => {
         const e = elements.find((x) => x.id === o.id);
@@ -229,7 +233,7 @@ export const PageSurface = memo(function PageSurface({
       if (done) setOptimistic(null);
     }
     if (hidden.size && [...hidden].every((id) => !elements.some((e) => e.id === id))) setHidden(new Set());
-    if (selected.some((id) => !elements.some((e) => e.id === id) && id !== pendingBox?.id))
+    if (selected.some((id) => !elements.some((e) => e.id === id) && !pendingBoxes.some((p) => p.id === id)))
       setSelected((s) => s.filter((id) => elements.some((e) => e.id === id)));
   }, [elements]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -429,6 +433,17 @@ export const PageSurface = memo(function PageSurface({
 
     if (activeTool === 'text' || activeTool === 'sticky') {
       const kind = activeTool === 'text' ? 'text' : 'sticky';
+      // Si estabas escribiendo y tocas fuera de la caja: se guarda el texto, queda
+      // seleccionado y la herramienta cambia a "Seleccionar y mover" (no se crea otra caja)
+      if (editingId && hit?.id !== editingId) {
+        e.preventDefault();
+        const id = editingId;
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        setEditingId(null);
+        setSelected([id]);
+        onSelectTool?.();
+        return;
+      }
       if (hit?.type === kind) {
         setEditingId(hit.id);
         return;
@@ -473,7 +488,7 @@ export const PageSurface = memo(function PageSurface({
       }
       // se muestra al instante; se guarda en la base cuando termines de escribir
       fresh.current.add(el.id);
-      setPendingBox(el);
+      setPendingBoxes((ps) => [...ps, el]);
       setEditingId(el.id);
       return;
     }
@@ -668,7 +683,7 @@ export const PageSurface = memo(function PageSurface({
     if (!text) {
       if (isFresh) {
         fresh.current.delete(el.id);
-        setPendingBox((p) => (p?.id === el.id ? null : p));
+        setPendingBoxes((ps) => ps.filter((p) => p.id !== el.id));
       } else await deleteElements([el.id]);
       return;
     }
@@ -739,9 +754,9 @@ export const PageSurface = memo(function PageSurface({
       .filter((e) => !hidden.has(e.id))
       .map((e) => optimistic?.get(e.id) ?? e)
       .map((e) => (xf && selected.includes(e.id) ? transformElement(e, xf) : e));
-    if (pendingBox && !list.some((e) => e.id === pendingBox.id)) list.push(pendingBox);
+    for (const p of pendingBoxes) if (!list.some((e) => e.id === p.id)) list.push(p);
     return list;
-  }, [elements, hidden, optimistic, xf, selected, pendingBox]);
+  }, [elements, hidden, optimistic, xf, selected, pendingBoxes]);
 
   const papers = view.filter((e) => e.type === 'image' || e.type === 'sticky' || e.type === 'card').sort((a, b) => a.z - b.z);
   const inks = view.filter((e): e is InkElement => e.type === 'ink');

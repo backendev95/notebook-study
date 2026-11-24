@@ -451,6 +451,8 @@ export function NotebookView({
     setTimeout(() => setMsg(''), 5000);
   };
 
+  const selectTool = useCallback(() => setSettings((o) => ({ ...o, tool: 'select' })), []);
+
   // callbacks estables para que las hojas no se redibujen en cada cuadro de la animación
   const activators = useRef(new Map<number, () => void>());
   const activator = (i: number) => {
@@ -498,6 +500,7 @@ export function NotebookView({
         bind={side === 'front' ? 'left' : 'right'}
         highlightId={highlight?.page === idx ? highlight.el : undefined}
         onActivate={activator(idx)}
+        onSelectTool={selectTool}
       />
     );
   };

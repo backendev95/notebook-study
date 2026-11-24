@@ -73,7 +73,10 @@ export function EditableBox({
     sel?.addRange(range);
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const saving = useRef(false);
   const finish = async () => {
+    // al salir de la caja puede llegar el aviso dos veces (perder el foco y dejar de editar): guardar una sola
+    if (saving.current) return;
     const node = ref.current;
     if (!node || !unsaved.current) {
       // sin cambios: si nunca se escribió nada, igual avisar (para borrar cajas vacías nuevas)
@@ -84,8 +87,13 @@ export function EditableBox({
     const html = node.innerHTML;
     const text = node.innerText.trim();
     const h = node.offsetHeight;
-    await onCommit(html, text, h);
-    unsaved.current = false;
+    saving.current = true;
+    try {
+      await onCommit(html, text, h);
+      unsaved.current = false;
+    } finally {
+      saving.current = false;
+    }
     onDone();
   };
 
