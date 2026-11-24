@@ -24,11 +24,24 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Revisar configuración de Supabase
+        env:
+          # Settings → Secrets and variables → Actions (sirve como Variable o como Secret)
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY || vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Faltan VITE_SUPABASE_URL o VITE_SUPABASE_PUBLISHABLE_KEY en Settings → Secrets and variables → Actions. Sin ellas la app no sincroniza."
+            exit 1
+          fi
+          case "$VITE_SUPABASE_URL" in
+            https://*.supabase.co|https://*.supabase.co/) echo "Supabase configurado: $VITE_SUPABASE_URL" ;;
+            *) echo "::error::VITE_SUPABASE_URL debe verse como https://xxxx.supabase.co (sin /rest/v1 ni nada al final)"; exit 1 ;;
+          esac
       - run: npm run build
         env:
-          # Settings → Secrets and variables → Actions → Variables
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY || vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
