@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Library } from './components/Library';
 import { NotebookView, type NavTarget } from './components/NotebookView';
-import { Review } from './components/Review';
 import { Welcome } from './components/Welcome';
 import { useSession } from './lib/auth';
 
@@ -12,6 +11,8 @@ import { useSession } from './lib/auth';
     #/cuaderno/<id>/hoja/<n>?el=<x>  ir a una hoja (y resaltar un elemento)
     #/repaso  ·  #/repaso/<id>       repasar tarjetas
 */
+const Review = lazy(() => import('./components/Review').then((m) => ({ default: m.Review })));
+
 type Route =
   | { name: 'library' }
   | { name: 'notebook'; id: string; page?: number; el?: string; nonce: number }
@@ -59,7 +60,11 @@ export default function App() {
     );
 
   if (route.name === 'review')
-    return <Review notebookId={route.id} onExit={() => (route.id ? goNotebook(route.id) : (location.hash = '#/'))} />;
+    return (
+      <Suspense fallback={<div className="loading">Cargando…</div>}>
+        <Review notebookId={route.id} onExit={() => (route.id ? goNotebook(route.id) : (location.hash = '#/'))} />
+      </Suspense>
+    );
 
   if (route.name === 'notebook') {
     const nav: NavTarget | undefined =

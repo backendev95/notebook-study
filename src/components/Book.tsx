@@ -14,19 +14,22 @@ import { Rings } from './Paper';
 export type Mode = 'single' | 'spread';
 export interface Flip {
   dir: 'next' | 'prev';
-  p: number; // 0..1
   target: number; // hoja a la que se llega
 }
+/*
+  El avance del giro (0..1) NO pasa por React: NotebookView escribe directamente
+  las variables CSS --fa (ángulo), --shade y --cast-r/--cast-l en el libro en cada
+  cuadro. Así pasar la hoja es fluido también en celulares.
+*/
 type Side = 'front' | 'back';
 
 interface FaceSpec {
   sheet: number;
   side: Side;
-  angle: number;
+  angle: number | 'flip'; // 'flip' = la hoja que está girando (ángulo en --fa)
   z: number;
   editable: boolean;
   hidden: boolean;
-  shade: number;
 }
 
 export interface Section {
@@ -68,13 +71,13 @@ export function Book({ mode, sheet: s, flip, scale, renderFace, canPrev, section
     if (sheet < -1) return;
     const key = `${sheet}:${side}`;
     const prev = specs.get(key);
-    const spec: FaceSpec = { sheet, side, angle: 0, z: 1, editable: false, hidden: false, shade: 0, ...f };
+    const spec: FaceSpec = { sheet, side, angle: 0, z: 1, editable: false, hidden: false, ...f };
     if (prev && !prev.hidden && spec.hidden) return; // lo visible gana a lo precargado
     specs.set(key, spec);
   };
-  const both = (sheet: number, angle: number, z: number, shade = 0) => {
-    put(sheet, 'front', { angle, z, shade });
-    put(sheet, 'back', { angle, z, shade });
+  const both = (sheet: number) => {
+    put(sheet, 'front', { angle: 'flip', z: 30 });
+    put(sheet, 'back', { angle: 'flip', z: 30 });
   };
 
   // precargar vecinos (ocultos) para que pasar la hoja sea instantáneo
@@ -90,22 +93,17 @@ export function Book({ mode, sheet: s, flip, scale, renderFace, canPrev, section
     put(s, 'front', { angle: 0, z: 10, editable: true });
     if (mode === 'spread' && s - 1 >= -1) put(s - 1, 'back', { angle: -180, z: 10, editable: true });
   } else {
-    const rad = Math.PI * flip.p;
-    const shade = Math.sin(rad) * 0.45;
     if (flip.dir === 'next') {
-      both(s, -180 * flip.p, 30, shade);
+      both(s);
       put(flip.target, 'front', { angle: 0, z: 10 });
       if (mode === 'spread' && s - 1 >= -1) put(s - 1, 'back', { angle: -180, z: 10 });
     } else {
-      both(flip.target, -180 * (1 - flip.p), 30, shade);
+      both(flip.target);
       put(s, 'front', { angle: 0, z: 10 });
       if (mode === 'spread' && flip.target - 1 >= -1) put(flip.target - 1, 'back', { angle: -180, z: 10 });
     }
   }
 
-  const flipAngle = flip ? (flip.dir === 'next' ? -180 * flip.p : -180 * (1 - flip.p)) : 0;
-  const shadowOnRight = flipAngle > -90;
-  const shadowOpacity = flip ? Math.sin(Math.PI * flip.p) * 0.5 : 0;
   const hasLeft = mode === 'spread' && s - 1 >= -1;
   const tabsShown = sections.length > 0;
   const currentSection = [...sections].reverse().find((t) => t.page <= currentPage);
@@ -124,26 +122,28 @@ export function Book({ mode, sheet: s, flip, scale, renderFace, canPrev, section
       <div className="page-stack" style={{ left: spine, width: W }} />
       {hasLeft && <div className="page-stack left" style={{ left: 0, width: W }} />}
       {[...specs.values()].map((f) => {
+        const rot = f.angle === 'flip' ? 'var(--fa, 0deg)' : `${f.angle}deg`;
         const transform =
           f.side === 'front'
-            ? `rotateY(${f.angle}deg)`
-            : `rotateY(${f.angle}deg) translateX(${W / 2}px) rotateY(180deg) translateX(${-W / 2}px)`;
+            ? `rotateY(${rot})`
+            : `rotateY(${rot}) translateX(${W / 2}px) rotateY(180deg) translateX(${-W / 2}px)`;
+        const flipping = f.angle === 'flip';
         return (
           <div
             key={`${f.sheet}:${f.side}`}
-            className={`face face-${f.side}${f.hidden ? ' face-hidden' : ''}`}
+            className={`face face-${f.side}${f.hidden ? ' face-hidden' : ''}${flipping ? ' face-flipping' : ''}`}
             style={{ left: spine, width: W, height: PAGE_H, transform, zIndex: f.z }}
           >
             {renderFace(f.sheet, f.side, f.editable && !flip)}
-            {f.shade > 0 && <div className={`shade shade-${f.side}`} style={{ opacity: f.shade }} />}
+            {flipping && <div className={`shade shade-${f.side}`} />}
           </div>
         );
       })}
       {flip && (
-        <div
-          className={`cast-shadow ${shadowOnRight ? 'right' : 'left'}`}
-          style={{ left: shadowOnRight ? spine : spine - W, width: W, opacity: shadowOpacity }}
-        />
+        <>
+          <div className="cast-shadow right" style={{ left: spine, width: W }} />
+          {mode === 'spread' && <div className="cast-shadow left" style={{ left: spine - W, width: W }} />}
+        </>
       )}
       <Rings left={spine - 30} />
       {(!flip || dragging) && (

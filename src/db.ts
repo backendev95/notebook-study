@@ -32,6 +32,14 @@ db.version(2)
       });
   });
 
+// v3: índice por tipo de elemento (contar tarjetas sin leer todos los trazos)
+db.version(3).stores({
+  notebooks: 'id, updatedAt, dirty',
+  pages: 'id, notebookId, [notebookId+order], updatedAt, dirty',
+  elements: 'id, pageId, updatedAt, dirty, type',
+  assets: 'id, dirty',
+});
+
 export const syncTables = () => [db.notebooks, db.pages, db.elements, db.assets];
 
 // Todo cambio hecho en este dispositivo queda marcado como pendiente (dirty = 1),

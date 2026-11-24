@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { db, getPages, now } from '../db';
-import { renderRichHtml } from '../lib/math';
+import { renderRichHtml, useKatex } from '../lib/math';
 import type { CardElement } from '../types';
 import { escapeHtml } from './elements';
 
@@ -41,12 +41,13 @@ export function Review({ notebookId, onExit }: { notebookId?: string; onExit: ()
   }, [notebookId]);
 
   const current = queue[0];
+  const katexReady = useKatex(!!current);
   const html = useMemo(
     () =>
       current
         ? { q: renderRichHtml(escapeHtml(current.card.q)), a: renderRichHtml(escapeHtml(current.card.a)) }
         : null,
-    [current],
+    [current, katexReady],
   );
 
   const answer = async (grade: 'again' | 'hard' | 'good') => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Session } from '@supabase/supabase-js';
 import { createNotebook, db, now } from '../db';
@@ -6,10 +6,12 @@ import { useAssetUrl } from '../lib/images';
 import { PAPER_LABELS, type Notebook, type PaperType } from '../types';
 import { AccountPanel, InstallButton } from './Account';
 import { Menu, MenuItem } from './Menu';
-import { COVER_COLORS, NotebookSettings } from './NotebookSettings';
+import { COVER_COLORS } from './colors';
 import { PaperSample } from './PaperSample';
-import { SearchDialog } from './SearchDialog';
 import { icons } from './Toolbar';
+
+const NotebookSettings = lazy(() => import('./NotebookSettings').then((m) => ({ default: m.NotebookSettings })));
+const SearchDialog = lazy(() => import('./SearchDialog').then((m) => ({ default: m.SearchDialog })));
 
 function CoverMini({ n }: { n: Notebook }) {
   const url = useAssetUrl(n.coverAssetId ?? '');
@@ -37,7 +39,7 @@ export function Library({
   });
   const dueCards = useLiveQuery(async () => {
     const t = Date.now();
-    return (await db.elements.toArray()).filter((e) => e.type === 'card' && !e.deleted && e.due <= t).length;
+    return (await db.elements.where('type').equals('card').toArray()).filter((e) => e.type === 'card' && !e.deleted && e.due <= t).length;
   });
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState('');
@@ -184,6 +186,7 @@ export function Library({
         </div>
       </div>
 
+      <Suspense fallback={null}>
       {editing && <NotebookSettings notebook={editing} onClose={() => setEditing(null)} />}
       {searching && (
         <SearchDialog
@@ -194,6 +197,7 @@ export function Library({
           }}
         />
       )}
+      </Suspense>
     </div>
   );
 }

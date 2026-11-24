@@ -9,15 +9,9 @@ export const holePositions = Array.from(
   (_, i) => HOLE_START + i * HOLE_SPACING,
 );
 
-/** Perforaciones de la hoja (donde pasan los anillos) */
+/** Perforaciones de la hoja (una sola capa con un fondo repetido: liviano en celulares) */
 export function Holes({ side }: { side: 'left' | 'right' }) {
-  return (
-    <div className={`holes holes-${side}`} aria-hidden>
-      {holePositions.map((y) => (
-        <span key={y} className="hole" style={{ top: y }} />
-      ))}
-    </div>
-  );
+  return <div className={`holes holes-${side}`} aria-hidden />;
 }
 
 /** Reverso en blanco de una hoja (vista de una página, mientras la pasas) */
@@ -29,15 +23,9 @@ export function BackPaper({ paper }: { paper: PaperType }) {
   );
 }
 
-/** Espiral metálica sobre el lomo */
+/** Espiral metálica sobre el lomo (una sola imagen repetida en vez de un elemento por anillo) */
 export function Rings({ left }: { left: number }) {
-  return (
-    <div className="rings" aria-hidden style={{ left }}>
-      {holePositions.map((y) => (
-        <span key={y} className="ring" style={{ top: y - 9 }} />
-      ))}
-    </div>
-  );
+  return <div className="rings" aria-hidden style={{ left }} />;
 }
 
 function CoverPhoto({ assetId }: { assetId: string }) {

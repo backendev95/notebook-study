@@ -5,18 +5,8 @@ import { compress, useAssetUrl } from '../lib/images';
 import { PAPER_LABELS, type Notebook, type PaperType } from '../types';
 import { PaperSample } from './PaperSample';
 
-export const COVER_COLORS = [
-  '#2f5d8a',
-  '#b8433a',
-  '#2f7a55',
-  '#6b4a9e',
-  '#d9902f',
-  '#33363f',
-  '#c2577f',
-  '#1f8a8a',
-  '#8a6a3f',
-  '#5a6b2f',
-];
+import { COVER_COLORS } from './colors';
+export { COVER_COLORS };
 
 function Photo({ id }: { id: string }) {
   const url = useAssetUrl(id);

@@ -3,7 +3,7 @@ import type React from 'react';
 import { createPortal } from 'react-dom';
 import { inkPath } from '../lib/ink';
 import { useAssetUrl } from '../lib/images';
-import { renderRichHtml, renderTex } from '../lib/math';
+import { hasMath, renderRichHtml, renderTex, useKatex } from '../lib/math';
 import type { CardElement, ImageElement, InkElement, MathElement, StickyElement, TextElement } from '../types';
 
 // ---------- Trazo ----------
@@ -28,7 +28,7 @@ export function ImageBox({ el, selected }: { el: ImageElement; selected: boolean
       className={`el image-el${selected ? ' selected' : ''}${el.locked ? ' locked' : ''}`}
       style={{ left: el.x, top: el.y, width: el.w, height: el.h, zIndex: el.z }}
     >
-      {url && <img src={url} alt="" draggable={false} />}
+      {url && <img src={url} alt="" draggable={false} decoding="async" />}
       {!el.locked && <span className="tape" />}
     </div>
   );
@@ -52,13 +52,14 @@ export function EditableBox({
   const unsaved = useRef(false); // hay texto escrito que todavía no se guardó
   const wasEditing = useRef(editing);
   const sticky = el.type === 'sticky';
+  const katexReady = useKatex(hasMath(el.html));
 
   // Mostrar el contenido guardado (con fórmulas $…$ renderizadas), nunca encima de algo sin guardar
   useEffect(() => {
     if (!ref.current || editing || unsaved.current) return;
     const shown = renderRichHtml(el.html);
     if (ref.current.innerHTML !== shown) ref.current.innerHTML = shown;
-  }, [el.html, editing]);
+  }, [el.html, editing, katexReady]);
 
   useEffect(() => {
     const node = ref.current;
@@ -161,7 +162,8 @@ export function measureTex(tex: string) {
 
 export function MathBox({ el, selected }: { el: MathElement; selected: boolean }) {
   const inner = useRef<HTMLDivElement>(null);
-  const html = useMemo(() => renderTex(el.tex, true), [el.tex]);
+  const ready = useKatex();
+  const html = useMemo(() => renderTex(el.tex, true), [el.tex, ready]); // eslint-disable-line react-hooks/exhaustive-deps
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
   useLayoutEffect(() => {
     const n = inner.current;
@@ -187,6 +189,7 @@ export function MathBox({ el, selected }: { el: MathElement; selected: boolean }
 // ---------- Tarjeta de repaso ----------
 export function CardBox({ el, selected }: { el: CardElement; selected: boolean }) {
   const [flipped, setFlipped] = useState(false);
+  useKatex(hasMath(el.q + el.a));
   const due = el.due <= Date.now();
   return (
     <div
@@ -284,6 +287,7 @@ export function MathEditor({
 }) {
   const [tex, setTex] = useState(initial);
   const area = useRef<HTMLTextAreaElement>(null);
+  useKatex();
   const insert = (s: string) => {
     const a = area.current;
     if (!a) return setTex((t) => t + s);

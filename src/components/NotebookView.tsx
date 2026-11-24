@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, ensurePages, getLastPage, getPages, setLastPage } from '../db';
@@ -9,14 +9,16 @@ import { importPdf } from '../lib/pdf';
 import { useSyncStatus } from '../lib/sync';
 import { PAGE_H, PAGE_W, type Page } from '../types';
 import { Book, bookWidth, TABS_W, type Flip, type Mode, type Section } from './Book';
-import { ExportDialog } from './ExportDialog';
-import { NotebookSettings } from './NotebookSettings';
 import { BackPaper, Cover, CoverInside } from './Paper';
-import { PagesPanel } from './PagesPanel';
 import { hasClip, isClipMarker, PageSurface, pasteClip, pasteText, type PenSettings } from './PageSurface';
-import { SearchDialog } from './SearchDialog';
 import { Toolbar } from './Toolbar';
 import type { SearchHit } from '../lib/search';
+
+// paneles que se cargan solo cuando se abren (la app arranca más rápido en el celular)
+const PagesPanel = lazy(() => import('./PagesPanel').then((m) => ({ default: m.PagesPanel })));
+const SearchDialog = lazy(() => import('./SearchDialog').then((m) => ({ default: m.SearchDialog })));
+const ExportDialog = lazy(() => import('./ExportDialog').then((m) => ({ default: m.ExportDialog })));
+const NotebookSettings = lazy(() => import('./NotebookSettings').then((m) => ({ default: m.NotebookSettings })));
 
 const SETTINGS_KEY = 'nbs-pen-settings';
 const VIEW_KEY = 'nbs-view';
@@ -74,7 +76,6 @@ export function NotebookView({
 }) {
   const notebook = useLiveQuery(async () => (await db.notebooks.get(notebookId)) ?? null, [notebookId]);
   const pages = useLiveQuery(() => getPages(notebookId), [notebookId]);
-  const syncStatus = useSyncStatus();
   useSyncExternalStore(historyStore.subscribe, historyStore.getVersion);
 
   const [settings, setSettings] = useState<PenSettings>(loadSettings);
@@ -92,7 +93,7 @@ export function NotebookView({
 
   const stageRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<HTMLDivElement>(null);
-  const flipRef = useRef<Flip | null>(null);
+  const flipRef = useRef<(Flip & { p: number }) | null>(null);
   const sheetRef = useRef(sheet);
   sheetRef.current = sheet;
   const activeRef = useRef(activePage);
@@ -105,10 +106,41 @@ export function NotebookView({
   const pdfInput = useRef<HTMLInputElement>(null);
   const pdfAfter = useRef(0);
 
-  const setFlip = (f: Flip | null) => {
-    flipRef.current = f;
-    setFlipState(f);
+  /** Escribe el avance del giro directo en el libro (sin redibujar con React) */
+  const applyFlip = (f: (Flip & { p: number }) | null) => {
+    const el = bookRef.current;
+    if (!el || !f) return;
+    const angle = f.dir === 'next' ? -180 * f.p : -180 * (1 - f.p);
+    const wave = Math.sin(Math.PI * f.p);
+    // se escribe solo en los elementos que se mueven (no en todo el libro): el navegador
+    // no tiene que revisar el resto de la hoja en cada cuadro
+    for (const face of el.querySelectorAll<HTMLElement>(':scope > .face-flipping')) {
+      face.style.transform = face.classList.contains('face-back')
+        ? `rotateY(${angle}deg) translateX(${PAGE_W / 2}px) rotateY(180deg) translateX(${-PAGE_W / 2}px)`
+        : `rotateY(${angle}deg)`;
+      const shade = face.lastElementChild as HTMLElement | null;
+      if (shade?.classList.contains('shade')) shade.style.opacity = String(wave * 0.45);
+    }
+    const castR = el.querySelector<HTMLElement>(':scope > .cast-shadow.right');
+    const castL = el.querySelector<HTMLElement>(':scope > .cast-shadow.left');
+    if (castR) castR.style.opacity = String(angle > -90 ? wave * 0.5 : 0);
+    if (castL) castL.style.opacity = String(angle <= -90 ? wave * 0.5 : 0);
   };
+  /** Empezar / terminar un giro: esto sí pasa por React (cambia qué caras se dibujan) */
+  const setFlip = (f: (Flip & { p: number }) | null) => {
+    flipRef.current = f;
+    applyFlip(f);
+    setFlipState(f ? { dir: f.dir, target: f.target } : null);
+  };
+  /** Mover el giro: solo variables CSS */
+  const moveFlip = (p: number) => {
+    const f = flipRef.current;
+    if (!f) return;
+    f.p = p;
+    applyFlip(f);
+  };
+  // las caras nuevas del giro se montan con el ángulo correcto desde el primer cuadro
+  useLayoutEffect(() => applyFlip(flipRef.current), [flip]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)), [settings]);
   useEffect(() => localStorage.setItem(VIEW_KEY, viewPref), [viewPref]);
@@ -191,14 +223,15 @@ export function NotebookView({
       const f = flipRef.current;
       if (!f) return;
       const start = f.p;
+      const { dir, target } = f;
       const t0 = performance.now();
       const dur = 220 + 480 * Math.abs(to - start);
       const step = (t: number) => {
         const k = Math.min(1, (t - t0) / dur);
         const ease = 1 - Math.pow(1 - k, 3);
-        setFlip({ ...f, p: start + (to - start) * ease });
+        moveFlip(start + (to - start) * ease);
         if (k < 1) requestAnimationFrame(step);
-        else finish(to, f);
+        else finish(to, { dir, target });
       };
       requestAnimationFrame(step);
     },
@@ -266,7 +299,7 @@ export function NotebookView({
       if (d.dir === 'next') p = Math.acos(rel) / Math.PI;
       else if (mode === 'spread') p = 1 - Math.acos(rel) / Math.PI;
       else p = clamp((e.clientX - d.startX) / (pw * 0.85), 0, 1);
-      setFlip({ ...f, p });
+      moveFlip(p);
     },
     up: () => {
       const d = drag.current;
@@ -282,7 +315,7 @@ export function NotebookView({
     y: Math.max(0, (stage.h - PAGE_H * s) / 2),
   });
   const zoomAt = useCallback(
-    (next: number, clientX?: number, clientY?: number) => {
+    (next: number, clientX?: number, clientY?: number, pan = { x: 0, y: 0 }) => {
       const el = stageRef.current;
       if (!el) return;
       const z = clamp(next, ZOOM_MIN, ZOOM_MAX);
@@ -295,8 +328,12 @@ export function NotebookView({
       const o1 = wrapOffset(s1);
       const cx = (el.scrollLeft + fx - o0.x) / s0;
       const cy = (el.scrollTop + fy - o0.y) / s0;
-      pendingScroll.current = { left: cx * s1 + o1.x - fx, top: cy * s1 + o1.y - fy };
-      setZoom(z);
+      pendingScroll.current = { left: cx * s1 + o1.x - fx - pan.x, top: cy * s1 + o1.y - fy - pan.y };
+      if (z === zoom) {
+        el.scrollLeft = pendingScroll.current.left;
+        el.scrollTop = pendingScroll.current.top;
+        pendingScroll.current = null;
+      } else setZoom(z);
     },
     [fit, zoom, stage, mode, extraW], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -324,7 +361,24 @@ export function NotebookView({
 
   // Dos dedos: pellizcar para zoom y arrastrar para mover. Con lápiz, un dedo también desplaza.
   const touches = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ d0: number; z0: number; mid: { x: number; y: number } } | null>(null);
+  // Durante el pellizco solo se escala la imagen ya dibujada (rápido); al soltar se dibuja una vez al nuevo tamaño
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const pinch = useRef<{
+    d0: number;
+    z0: number;
+    mid0: { x: number; y: number };
+    z: number;
+    pan: { x: number; y: number };
+  } | null>(null);
+  const endPinch = () => {
+    const pc = pinch.current;
+    pinch.current = null;
+    const w = wrapRef.current;
+    if (!pc || !w) return;
+    w.style.transform = '';
+    w.style.transformOrigin = '';
+    zoomAt(pc.z, pc.mid0.x, pc.mid0.y, pc.pan);
+  };
   const pan = useRef<{ x: number; y: number } | null>(null);
   const onTouchDown = (e: React.PointerEvent) => {
     if (e.pointerType !== 'touch') return;
@@ -332,8 +386,14 @@ export function NotebookView({
     if (touches.current.size === 2) {
       cancelGestures();
       const [a, b] = [...touches.current.values()];
-      pinch.current = { d0: Math.hypot(a.x - b.x, a.y - b.y), z0: zoom, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+      const mid0 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      pinch.current = { d0: Math.hypot(a.x - b.x, a.y - b.y), z0: zoom, mid0, z: zoom, pan: { x: 0, y: 0 } };
       pan.current = null;
+      const w = wrapRef.current;
+      if (w) {
+        const r = w.getBoundingClientRect();
+        w.style.transformOrigin = `${mid0.x - r.left}px ${mid0.y - r.top}px`;
+      }
     } else if (touches.current.size === 1 && input.penSeen && !flipRef.current) {
       const t = e.target as HTMLElement;
       if (!t.closest('[data-el], .selection-box, .turn-zone, button, .section-tabs')) pan.current = { x: e.clientX, y: e.clientY };
@@ -344,15 +404,15 @@ export function NotebookView({
     touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = stageRef.current;
     if (!el) return;
-    if (pinch.current && touches.current.size >= 2) {
+    const pc = pinch.current;
+    if (pc && touches.current.size >= 2) {
       const [a, b] = [...touches.current.values()];
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       const d = Math.hypot(a.x - b.x, a.y - b.y);
-      el.scrollLeft -= mid.x - pinch.current.mid.x;
-      el.scrollTop -= mid.y - pinch.current.mid.y;
-      pinch.current.mid = mid;
-      const target = clamp((pinch.current.z0 * d) / Math.max(1, pinch.current.d0), ZOOM_MIN, ZOOM_MAX);
-      if (Math.abs(target - zoom) > 0.01) zoomAt(target, mid.x, mid.y);
+      pc.z = clamp((pc.z0 * d) / Math.max(1, pc.d0), ZOOM_MIN, ZOOM_MAX);
+      pc.pan = { x: mid.x - pc.mid0.x, y: mid.y - pc.mid0.y };
+      const w = wrapRef.current;
+      if (w) w.style.transform = `translate(${pc.pan.x}px, ${pc.pan.y}px) scale(${pc.z / pc.z0})`;
     } else if (pan.current) {
       el.scrollLeft -= e.clientX - pan.current.x;
       el.scrollTop -= e.clientY - pan.current.y;
@@ -362,7 +422,7 @@ export function NotebookView({
   const onTouchUp = (e: React.PointerEvent) => {
     if (e.pointerType !== 'touch') return;
     touches.current.delete(e.pointerId);
-    if (touches.current.size < 2) pinch.current = null;
+    if (touches.current.size < 2 && pinch.current) endPinch();
     if (touches.current.size === 0) pan.current = null;
   };
 
@@ -462,23 +522,7 @@ export function NotebookView({
   };
 
   // ---------- render ----------
-  if (notebook === null || notebook?.deleted) {
-    const searching = syncStatus.state === 'syncing' || (syncStatus.state !== 'off' && !syncStatus.lastSync);
-    return (
-      <div className="loading">
-        {searching ? (
-          'Buscando el cuaderno en la nube…'
-        ) : (
-          <div>
-            No encontré este cuaderno.{' '}
-            <button className="link" onClick={onBack}>
-              Volver a mis cuadernos
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
+  if (notebook === null || notebook?.deleted) return <NotFound onBack={onBack} />;
 
   const ready = notebook && pages && sheet !== null && stage.w > 0;
   const defPaper = notebook?.paper ?? 'grid';
@@ -551,7 +595,7 @@ export function NotebookView({
         onPointerCancelCapture={onTouchUp}
       >
         {ready ? (
-          <div className="book-wrap" style={{ width: wrapW, height: wrapH }}>
+          <div className="book-wrap" ref={wrapRef} style={{ width: wrapW, height: wrapH }}>
             <div className="book-pos" style={{ left: RING_PAD * scale }}>
               <Book
                 mode={mode}
@@ -593,6 +637,7 @@ export function NotebookView({
       )}
       {msg && <div className="toast error">{msg}</div>}
 
+      <Suspense fallback={null}>
       {panel === 'pages' && notebook && pages && (
         <PagesPanel
           notebook={notebook}
@@ -624,6 +669,27 @@ export function NotebookView({
         <ExportDialog notebook={notebook} pages={pages} activePage={activePage} settings={settings} onClose={() => setPanel(null)} />
       )}
       {panel === 'settings' && notebook && <NotebookSettings notebook={notebook} onClose={() => setPanel(null)} />}
+      </Suspense>
+    </div>
+  );
+}
+
+/** Cuaderno que no está en este dispositivo (quizá todavía viene de la nube) */
+function NotFound({ onBack }: { onBack: () => void }) {
+  const syncStatus = useSyncStatus();
+  const searching = syncStatus.state === 'syncing' || (syncStatus.state !== 'off' && !syncStatus.lastSync);
+  return (
+    <div className="loading">
+      {searching ? (
+        'Buscando el cuaderno en la nube…'
+      ) : (
+        <div>
+          No encontré este cuaderno.{' '}
+          <button className="link" onClick={onBack}>
+            Volver a mis cuadernos
+          </button>
+        </div>
+      )}
     </div>
   );
 }
