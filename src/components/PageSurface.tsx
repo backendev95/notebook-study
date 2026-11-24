@@ -287,6 +287,30 @@ export const PageSurface = memo(function PageSurface({
   const marginX = (w: number): [number, number] =>
     bind === 'left' ? [MARGIN_LEFT + 4, PAGE_W - w - 8] : [8, PAGE_W - MARGIN_LEFT - w - 4];
 
+  /**
+    Ancho libre para una caja de texto nueva: desde donde tocaste hasta lo primero que
+    haya a la derecha en ese renglón (imagen, nota, fórmula, tarjeta u otro texto).
+    Si no hay nada, llega hasta el borde de la hoja.
+  */
+  const freeWidth = (x: number, y: number) => {
+    const right = bind === 'left' ? PAGE_W - 20 : PAGE_W - MARGIN_LEFT - 8;
+    const top = y;
+    const bottom = y + GRID * 2; // el renglón donde empiezas y el siguiente
+    let limit = right;
+    for (const o of elementsRef.current) {
+      if (o.type === 'ink' || (o.type === 'image' && o.locked)) continue; // trazos y fondos de PDF no estorban
+      let h = o.h;
+      if (o.type === 'text' || o.type === 'sticky') {
+        const node = surfaceRef.current?.querySelector<HTMLElement>(`[data-el="${o.id}"]`);
+        h = node?.offsetHeight ?? o.h;
+      }
+      const overlapsRow = o.y < bottom && o.y + h > top;
+      if (!overlapsRow) continue;
+      if (o.x > x && o.x < limit) limit = o.x - 10;
+    }
+    return Math.max(120, limit - x);
+  };
+
   // ---------- borrador ----------
   const eraseAt = (p: Pt) => {
     const r = 10;
@@ -453,16 +477,16 @@ export const PageSurface = memo(function PageSurface({
       const z = elementsRef.current.reduce((m, x) => Math.max(m, x.z), 0) + 1;
       let el: TextElement | StickyElement;
       if (kind === 'text') {
-        const w = 360;
         const [mx, Mx] = marginX(160);
         const x = clamp(p[0] - 6, mx, Mx);
+        const y = clamp(Math.floor(p[1] / GRID) * GRID, 0, PAGE_H - GRID * 2);
         el = {
           id: uid(),
           pageId,
           type: 'text',
           x,
-          y: clamp(Math.floor(p[1] / GRID) * GRID, 0, PAGE_H - GRID * 2),
-          w: Math.min(w, PAGE_W - x - 16),
+          y,
+          w: freeWidth(x, y),
           h: GRID,
           z,
           updatedAt: now(),
