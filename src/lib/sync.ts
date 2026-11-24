@@ -120,7 +120,14 @@ class SyncEngine {
     this.listeners.forEach((l) => l());
   }
 
-  private onLocalChange = () => this.request(1500);
+  // Mientras escribes o dibujas se agrupan los cambios: se sube 4 s después del último
+  // trazo, y como máximo 15 s después del primero (para no perder nada si no paras).
+  private firstChangeAt = 0;
+  private onLocalChange = () => {
+    const now = Date.now();
+    if (!this.firstChangeAt) this.firstChangeAt = now;
+    this.request(Math.max(0, Math.min(4000, 15_000 - (now - this.firstChangeAt))));
+  };
   private onOnline = () => this.request(100);
   private onVisible = () => document.visibilityState === 'visible' && this.request(100);
 
@@ -136,7 +143,8 @@ class SyncEngine {
     localChanges.addEventListener('change', this.onLocalChange);
     window.addEventListener('online', this.onOnline);
     document.addEventListener('visibilitychange', this.onVisible);
-    this.interval = setInterval(() => this.request(0), 20_000);
+    // revisar cambios de otros dispositivos cada 45 s, solo con la app a la vista
+    this.interval = setInterval(() => document.visibilityState === 'visible' && this.request(0), 45_000);
     this.set({ state: 'idle', error: undefined });
     this.request(0);
   }
@@ -169,7 +177,9 @@ class SyncEngine {
       return;
     }
     this.running = true;
-    this.set({ state: 'syncing' });
+    this.firstChangeAt = 0;
+    // "Sincronizando…" solo aparece si tarda; las sincronizaciones rápidas no se notan
+    const showBusy = setTimeout(() => this.set({ state: 'syncing' }), 800);
     try {
       await this.push();
       await this.pull();
@@ -182,6 +192,7 @@ class SyncEngine {
         pending: await this.countPending(),
       });
     } finally {
+      clearTimeout(showBusy);
       this.running = false;
       if (this.again) {
         this.again = false;
@@ -265,13 +276,9 @@ class SyncEngine {
       for (const r of remote) {
         const local = (await table.get(r.id as string)) as Row | undefined;
         const incoming = toLocal(name, r);
-        // gana el más reciente; si empatan y no hay cambios locales pendientes, se toma el de la nube
-        if (
-          !local ||
-          (incoming.updatedAt as number) > (local.updatedAt as number) ||
-          (incoming.updatedAt === local.updatedAt && !local.dirty)
-        )
-          await table.put(incoming);
+        // gana el más reciente; si es la misma versión que ya está aquí, no se toca
+        // (evita redibujar la pantalla sin necesidad)
+        if (!local || (incoming.updatedAt as number) > (local.updatedAt as number)) await table.put(incoming);
       }
     });
   }
