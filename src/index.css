@@ -901,6 +901,20 @@ button:disabled {
 .section-tab.current {
   transform: translateX(8px);
 }
+/* pestañas de secciones que ya pasaste: del lado izquierdo, como en un cuaderno real */
+.section-tabs.left .section-tab {
+  left: auto;
+  right: -8px;
+  border-radius: 14px 0 0 14px;
+  box-shadow: -3px 3px 8px rgba(0, 0, 0, 0.3);
+}
+.section-tabs.left .section-tab span {
+  transform: rotate(180deg);
+}
+.section-tabs.left .section-tab:hover,
+.section-tabs.left .section-tab.current {
+  transform: translateX(-8px);
+}
 
 /* Portada */
 .cover {

@@ -107,6 +107,21 @@ export function Book({ mode, sheet: s, flip, scale, renderFace, canPrev, section
   const hasLeft = mode === 'spread' && s - 1 >= -1;
   const tabsShown = sections.length > 0;
   const currentSection = [...sections].reverse().find((t) => t.page <= currentPage);
+  // Como en un cuaderno real, la pestaña va pegada a su hoja: si esa hoja ya se pasó,
+  // la pestaña queda a la izquierda; si todavía no, a la derecha.
+  const sheetOf = (page: number) => (mode === 'spread' ? Math.floor(page / 2) : page);
+  const passed = (page: number) => s >= 0 && sheetOf(page) < s;
+  const tab = (t: Section, i: number) => (
+    <button
+      key={t.page}
+      className={`section-tab${currentSection?.page === t.page ? ' current' : ''}`}
+      style={{ top: 30 + i * 150, background: t.color }}
+      onClick={() => onJump(t.page)}
+      title={`Ir a ${t.title}`}
+    >
+      <span>{t.title}</span>
+    </button>
+  );
 
   return (
     <div
@@ -175,19 +190,14 @@ export function Book({ mode, sheet: s, flip, scale, renderFace, canPrev, section
         </>
       )}
       {tabsShown && (
-        <div className="section-tabs" style={{ left: bookWidth(mode) }}>
-          {sections.map((t, i) => (
-            <button
-              key={t.page}
-              className={`section-tab${currentSection?.page === t.page ? ' current' : ''}`}
-              style={{ top: 30 + i * 150, background: t.color }}
-              onClick={() => onJump(t.page)}
-              title={`Ir a ${t.title}`}
-            >
-              <span>{t.title}</span>
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="section-tabs right" style={{ left: bookWidth(mode) }}>
+            {sections.map((t, i) => (passed(t.page) ? null : tab(t, i)))}
+          </div>
+          <div className="section-tabs left" style={{ left: -TABS_W - (mode === 'single' ? 30 : 0) }}>
+            {sections.map((t, i) => (passed(t.page) ? tab(t, i) : null))}
+          </div>
+        </>
       )}
     </div>
   );

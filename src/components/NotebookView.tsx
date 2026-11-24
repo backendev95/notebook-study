@@ -162,7 +162,9 @@ export function NotebookView({
         .map(({ p, i }) => ({ title: p.sectionTitle!, color: p.sectionColor ?? '#8a8f98', page: i })),
     [pages],
   );
-  const extraW = RING_PAD + (sections.length ? TABS_W : 0);
+  // espacio para las pestañas de los separadores a ambos lados (pasadas a la izquierda, pendientes a la derecha)
+  const tabsPad = sections.length ? TABS_W : 0;
+  const extraW = RING_PAD + tabsPad * 2;
   const fitFor = useCallback(
     (m: Mode) => {
       const pad = stage.w < 640 ? 12 : 36;
@@ -596,7 +598,7 @@ export function NotebookView({
       >
         {ready ? (
           <div className="book-wrap" ref={wrapRef} style={{ width: wrapW, height: wrapH }}>
-            <div className="book-pos" style={{ left: RING_PAD * scale }}>
+            <div className="book-pos" style={{ left: (RING_PAD + tabsPad) * scale }}>
               <Book
                 mode={mode}
                 sheet={s}
