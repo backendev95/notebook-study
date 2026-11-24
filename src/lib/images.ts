@@ -1,4 +1,5 @@
-import { addElement, db, imageSize, nextZ, now, saveAsset, uid } from '../db';
+import { db, imageSize, nextZ, now, saveAsset, uid } from '../db';
+import { addElements } from './history';
 import { MARGIN_LEFT, PAGE_H, PAGE_W } from '../types';
 import { useEffect, useState } from 'react';
 import { sync } from './sync';
@@ -6,7 +7,7 @@ import { sync } from './sync';
 const MAX_SIDE = 1800;
 
 /** Reduce fotos muy grandes antes de guardarlas (menos espacio y sincronización más rápida) */
-async function compress(blob: Blob): Promise<Blob> {
+export async function compress(blob: Blob): Promise<Blob> {
   if (blob.type === 'image/gif' || blob.type === 'image/svg+xml') return blob;
   try {
     const bmp = await createImageBitmap(blob);
@@ -35,7 +36,7 @@ export async function insertImage(pageId: string, file: Blob, at?: { x: number; 
   const h = (w * nat.h) / nat.w;
   const cx = at?.x ?? PAGE_W / 2 + (Math.random() - 0.5) * 80;
   const cy = at?.y ?? PAGE_H / 2 + (Math.random() - 0.5) * 80;
-  await addElement({
+  await addElements([{
     id: uid(),
     pageId,
     type: 'image',
@@ -46,7 +47,7 @@ export async function insertImage(pageId: string, file: Blob, at?: { x: number; 
     h,
     z: await nextZ(pageId),
     updatedAt: now(),
-  });
+  }]);
 }
 
 const urlCache = new Map<string, string>();
@@ -54,6 +55,7 @@ const urlCache = new Map<string, string>();
 export function useAssetUrl(assetId: string) {
   const [url, setUrl] = useState(() => urlCache.get(assetId));
   useEffect(() => {
+    if (!assetId) return;
     const cached = urlCache.get(assetId);
     if (cached) {
       setUrl(cached);

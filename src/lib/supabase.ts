@@ -19,6 +19,10 @@ export function explainError(e: unknown): string {
   const msg = err?.message ?? String(e);
   if (err?.code === 'PGRST106' || /schema must be one of|Invalid schema/i.test(msg))
     return 'Falta exponer el esquema "notebook" en Supabase (Project Settings → Data API → Exposed schemas).';
+  if (err?.code === 'PGRST204' || /Could not find the '.*' column|column .* does not exist/i.test(msg))
+    return 'Falta actualizar la base: ejecuta supabase/migrations/002_mejoras.sql en el SQL Editor de Supabase.';
+  if (/violates check constraint "elements_type_check"/i.test(msg))
+    return 'Falta actualizar la base: ejecuta supabase/migrations/002_mejoras.sql en el SQL Editor de Supabase.';
   if (err?.code === '42P01' || /does not exist/i.test(msg))
     return 'Faltan las tablas en Supabase: ejecuta supabase/schema.sql en el SQL Editor.';
   if (/Bucket not found/i.test(msg)) return 'Falta el bucket de imágenes: ejecuta supabase/schema.sql.';

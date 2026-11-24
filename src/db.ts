@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Asset, NoteElement, Notebook, Page } from './types';
+import type { Asset, NoteElement, Notebook, Page, PaperType } from './types';
 
 // Base de datos local (IndexedDB). Funciona sin conexión; cuando hay sesión
 // se sincroniza con Supabase (ver lib/sync.ts) usando updatedAt/deleted/dirty.
@@ -70,11 +70,11 @@ export const getLastPage = (notebookId: string) => Number(localStorage.getItem(`
 export const setLastPage = (notebookId: string, page: number) =>
   localStorage.setItem(`nbs-last-${notebookId}`, String(page));
 
-export async function createNotebook(title: string, color: string, pages = 3) {
+export async function createNotebook(title: string, color: string, pages = 3, paper: PaperType = 'grid') {
   const id = uid();
   const t = now();
   await db.transaction('rw', db.notebooks, db.pages, async () => {
-    await db.notebooks.add({ id, title, color, createdAt: t, updatedAt: t, lastPage: -1 });
+    await db.notebooks.add({ id, title, color, paper, coverAssetId: null, createdAt: t, updatedAt: t });
     await db.pages.bulkAdd(
       Array.from({ length: pages }, (_, i) => ({ id: uid(), notebookId: id, order: i, updatedAt: t })),
     );
@@ -131,4 +131,73 @@ export function imageSize(blob: Blob): Promise<{ w: number; h: number }> {
     img.onerror = () => resolve({ w: 300, h: 200 });
     img.src = url;
   });
+}
+
+// ---------- Cuadernos ----------
+export async function updateNotebook(id: string, changes: Partial<Notebook>) {
+  await db.notebooks.update(id, { ...changes, updatedAt: now() });
+}
+
+// ---------- Hojas ----------
+export async function updatePage(id: string, changes: Partial<Page>) {
+  await db.pages.update(id, { ...changes, updatedAt: now() });
+}
+
+/** Inserta una hoja nueva después de la posición `index` (-1 = al principio) */
+export async function insertPageAfter(notebookId: string, index: number) {
+  const pages = await getPages(notebookId);
+  const prev = pages[index]?.order;
+  const next = pages[index + 1]?.order;
+  const order =
+    prev === undefined ? (next === undefined ? 0 : next - 1) : next === undefined ? prev + 1 : (prev + next) / 2;
+  const page: Page = { id: uid(), notebookId, order, updatedAt: now() };
+  await db.pages.add(page);
+  return page;
+}
+
+/** Copia una hoja con todo su contenido justo después de ella */
+export async function duplicatePage(notebookId: string, index: number) {
+  const pages = await getPages(notebookId);
+  const src = pages[index];
+  if (!src) return;
+  const page = await insertPageAfter(notebookId, index);
+  await db.pages.update(page.id, { paper: src.paper ?? null });
+  const els = (await db.elements.where('pageId').equals(src.id).toArray()).filter((e) => !e.deleted);
+  await db.elements.bulkAdd(els.map((e) => ({ ...e, id: uid(), pageId: page.id, updatedAt: now() })));
+  return page;
+}
+
+export async function deletePage(pageId: string) {
+  const t = now();
+  await db.transaction('rw', db.pages, db.elements, async () => {
+    await db.pages.update(pageId, { deleted: true, updatedAt: t });
+    const els = await db.elements.where('pageId').equals(pageId).toArray();
+    for (const e of els) if (!e.deleted) await db.elements.update(e.id, { deleted: true, updatedAt: t });
+  });
+}
+
+/** Mueve la hoja `index` una posición hacia adelante (+1) o hacia atrás (-1) */
+export async function movePage(notebookId: string, index: number, dir: -1 | 1) {
+  const pages = await getPages(notebookId);
+  const a = pages[index];
+  const b = pages[index + dir];
+  if (!a || !b) return;
+  const t = now();
+  await db.transaction('rw', db.pages, async () => {
+    await db.pages.update(a.id, { order: b.order, updatedAt: t });
+    await db.pages.update(b.id, { order: a.order, updatedAt: t });
+  });
+}
+
+/** Se asegura de que el cuaderno tenga al menos `count` hojas */
+export async function ensurePages(notebookId: string, count: number) {
+  let pages = await getPages(notebookId);
+  while (pages.length < count) {
+    await addPageAtEnd(notebookId);
+    pages = await getPages(notebookId);
+  }
+}
+
+export async function getElements(pageId: string) {
+  return (await db.elements.where('pageId').equals(pageId).toArray()).filter((e) => !e.deleted);
 }

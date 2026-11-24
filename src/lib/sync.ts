@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { db, localChanges, remoteWrite, syncTables } from '../db';
 import type { Asset, NoteElement, Notebook, Page } from '../types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { BUCKET, explainError, supabase } from './supabase';
 
 /*
@@ -16,6 +17,7 @@ import { BUCKET, explainError, supabase } from './supabase';
 export type SyncState = 'off' | 'idle' | 'syncing' | 'offline' | 'error';
 export interface SyncStatus {
   state: SyncState;
+  realtime?: boolean;
   lastSync?: number;
   error?: string;
   pending: number;
@@ -41,6 +43,8 @@ function toRemote(table: TableName, l: Row): Row {
         id: n.id,
         title: n.title,
         color: n.color,
+        paper: n.paper ?? 'grid',
+        cover_asset_id: n.coverAssetId ?? null,
         created_at: n.createdAt,
         updated_at: n.updatedAt,
         deleted: !!n.deleted,
@@ -48,7 +52,16 @@ function toRemote(table: TableName, l: Row): Row {
     }
     case 'pages': {
       const p = l as unknown as Page;
-      return { id: p.id, notebook_id: p.notebookId, position: p.order, updated_at: p.updatedAt, deleted: !!p.deleted };
+      return {
+        id: p.id,
+        notebook_id: p.notebookId,
+        position: p.order,
+        paper: p.paper ?? null,
+        section_title: p.sectionTitle ?? null,
+        section_color: p.sectionColor ?? null,
+        updated_at: p.updatedAt,
+        deleted: !!p.deleted,
+      };
     }
     case 'elements': {
       const { id, pageId, type, updatedAt, deleted, dirty: _d, ...data } = l as unknown as NoteElement & Row;
@@ -70,6 +83,8 @@ function toLocal(table: TableName, r: Row): Row {
         id: r.id,
         title: r.title,
         color: r.color,
+        paper: (r.paper as string) ?? 'grid',
+        coverAssetId: (r.cover_asset_id as string) ?? null,
         createdAt: Number(r.created_at),
         updatedAt: Number(r.updated_at),
         deleted: r.deleted,
@@ -80,6 +95,9 @@ function toLocal(table: TableName, r: Row): Row {
         id: r.id,
         notebookId: r.notebook_id,
         order: r.position,
+        paper: r.paper ?? null,
+        sectionTitle: r.section_title ?? null,
+        sectionColor: r.section_color ?? null,
         updatedAt: Number(r.updated_at),
         deleted: r.deleted,
         dirty: 0,
@@ -108,7 +126,9 @@ class SyncEngine {
   private again = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private interval: ReturnType<typeof setInterval> | undefined;
+  private channel: RealtimeChannel | null = null;
   private fetching = new Map<string, Promise<void>>();
+  private inLock = false;
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -145,11 +165,32 @@ class SyncEngine {
     document.addEventListener('visibilitychange', this.onVisible);
     // revisar cambios de otros dispositivos cada 45 s, solo con la app a la vista
     this.interval = setInterval(() => document.visibilityState === 'visible' && this.request(0), 45_000);
+    // pedir al navegador que no borre los datos locales cuando le falte espacio
+    navigator.storage?.persist?.().catch(() => undefined);
+    this.subscribeRealtime(userId);
     this.set({ state: 'idle', error: undefined });
     this.request(0);
   }
 
+  /** Tiempo real: cuando otro dispositivo cambia algo, Supabase avisa y se baja enseguida */
+  private subscribeRealtime(userId: string) {
+    const sb = supabase;
+    if (!sb) return;
+    let ch = sb.channel(`notebook-sync-${userId}`);
+    for (const table of ['notebooks', 'pages', 'elements', 'assets'])
+      ch = ch.on(
+        'postgres_changes',
+        { event: '*', schema: 'notebook', table, filter: `user_id=eq.${userId}` },
+        () => this.request(700),
+      );
+    this.channel = ch.subscribe((status) => this.set({ realtime: status === 'SUBSCRIBED' }));
+  }
+
   stop() {
+    if (this.channel) {
+      supabase?.removeChannel(this.channel);
+      this.channel = null;
+    }
     this.userId = null;
     clearTimeout(this.timer);
     clearInterval(this.interval);
@@ -166,8 +207,24 @@ class SyncEngine {
     this.timer = setTimeout(() => this.run(), delay);
   }
 
-  async run() {
+  async run(): Promise<void> {
     if (!this.userId || !supabase) return;
+    // si la app está abierta en varias pestañas, solo una sincroniza a la vez
+    if (navigator.locks && !this.inLock) {
+      await navigator.locks.request('nbs-sync', { ifAvailable: true }, async (lock) => {
+        if (!lock) {
+          this.request(3000);
+          return;
+        }
+        this.inLock = true;
+        try {
+          await this.run();
+        } finally {
+          this.inLock = false;
+        }
+      });
+      return;
+    }
     if (this.running) {
       this.again = true;
       return;

@@ -2,23 +2,34 @@
 
 Plataforma de cuadernos virtuales para estudiar. Cada cuaderno se ve y se usa como un **cuaderno cuadriculado anillado**: escribes con teclado o a mano con lápiz, pegas imágenes donde quieras y pasas las hojas como en uno de verdad.
 
-## Qué hace hoy (v0.3)
+## Qué hace hoy (v0.4)
 
-- **Biblioteca de cuadernos** con portada de color y nombre.
-- **Hoja cuadriculada** con perforaciones y espiral metálica.
-- **Pasar hojas en 3D**: arrastras la esquina inferior derecha (o el margen izquierdo para volver), o usas las flechas ← → o los botones. Al pasar la última hoja se agrega una nueva.
-- **Escritura mixta**:
-  - **Texto**: haz clic donde quieras y escribe; las líneas caen sobre la cuadrícula.
-  - **Lápiz**: trazo suave con presión real si usas stylus (iPad, Surface, Wacom…).
-  - **Resaltador** y **borrador** (también el botón borrador del lápiz).
-  - Si se detecta un lápiz, se ignora el toque de la palma al dibujar.
-- **Imágenes**: Ctrl+V, arrastrar y soltar, o botón de imagen. Se pueden mover y redimensionar con la herramienta de selección. Las fotos grandes se comprimen automáticamente.
-- **Guardado automático y sin conexión** en el navegador (IndexedDB). Al volver, el cuaderno se abre en la última hoja.
-- **App instalable (PWA)**: se instala en el celular, la tablet o el computador con su propio ícono, abre en pantalla completa y funciona sin internet.
-  - Android, o Chrome/Edge en el computador: botón **Instalar app** en la pantalla principal.
-  - iPhone/iPad: en Safari toca **Compartir → Agregar a pantalla de inicio**.
-- **Pantalla de inicio de sesión** al abrir la app, con la opción de continuar sin cuenta.
-- **Sincronización entre dispositivos** con Supabase: inicias sesión con la **misma cuenta de tus otras apps** y tus cuadernos aparecen en el computador, la tablet y el celular. Sin conexión sigues trabajando y todo se sube al volver la conexión.
+**El cuaderno**
+- Biblioteca con portadas de color o **con foto**, búsqueda en todos los apuntes y acceso al repaso.
+- **Vista de dos páginas** (cuaderno abierto) en pantallas anchas y de una página en el celular; se cambia en ⋯ → Vista.
+- **Pasar hojas en 3D** arrastrando la esquina, con flechas ← → o con los botones.
+- **Tipos de hoja:** cuadriculada, rayada, punteada o blanca, para todo el cuaderno o por hoja.
+- **Separadores** con pestañas de color al borde del cuaderno y un **índice**.
+- **Panel de hojas** con miniaturas: insertar, duplicar, mover, eliminar, cambiar tipo de hoja.
+- **Zoom:** pellizco con dos dedos, Ctrl + rueda o botones. Con lápiz, el dedo desplaza la hoja.
+
+**Herramientas**
+- Lápiz con presión, resaltador, borrador (también el botón borrador del lápiz) y **figuras** (línea, flecha, rectángulo, óvalo, triángulo).
+- **Figuras automáticas:** dibuja a mano y mantén el lápiz quieto un momento al final; se convierte en figura limpia.
+- **Texto** sobre los renglones, con **fórmulas** entre `$…$`.
+- **Fórmulas** (LaTeX) con botones de ayuda, **notas adhesivas**, **imágenes** (Ctrl+V, arrastrar o botón).
+- **Lazo** para encerrar trazos y moverlos, escalarlos, cambiarles el color, duplicarlos o copiarlos a otra hoja.
+- **Deshacer / rehacer** (Ctrl+Z / Ctrl+Y) por hoja.
+
+**Para estudiar**
+- **Tarjetas de repaso** en la hoja (pregunta al frente, respuesta atrás) y **modo repaso** con repetición espaciada.
+- **Buscar** (Ctrl+F) en textos, notas, fórmulas, tarjetas y separadores, sin importar tildes.
+- **Importar un PDF** como hojas (las diapositivas de clase) para escribir encima.
+- **Exportar a PDF** el cuaderno completo, la hoja actual o un rango.
+
+**En todos tus dispositivos**
+- App instalable (PWA) que funciona sin internet.
+- Inicio de sesión con la misma cuenta de tus otras apps y **sincronización en tiempo real** con Supabase.
 
 ## Tecnologías
 
@@ -45,6 +56,8 @@ Sin `.env` la app funciona igual, pero solo guarda en el dispositivo.
 ## Configurar Supabase (proyecto compartido con tus otras apps)
 
 Esta app usa **el mismo proyecto** de Supabase que tus otras apps, pero sus tablas viven aparte en el esquema `notebook`. Las tablas de las otras apps no se tocan. El login (`auth.users`) es el mismo, así que entras con el mismo correo y contraseña.
+
+> **¿Ya lo habías configurado antes de la v0.4?** Solo ejecuta `supabase/migrations/002_mejoras.sql` en el SQL Editor. Agrega los campos nuevos (tipos de hoja, separadores, foto de portada, notas, fórmulas y tarjetas) y activa el tiempo real. Si no lo ejecutas, la app avisa "Falta actualizar la base".
 
 1. **Crear tablas y permisos**: Supabase → **SQL Editor** → pega `supabase/schema.sql` → **Run**. Crea:
    - el esquema `notebook` con las tablas `notebooks`, `pages`, `elements` y `assets`;
@@ -73,30 +86,35 @@ Si tu otra app usa login con Google u otro proveedor en lugar de correo y contra
 ## Estructura
 
 ```
-supabase/schema.sql        Tablas, seguridad y bucket (se ejecuta una vez en Supabase)
+supabase/schema.sql              Tablas, seguridad y bucket (instalación nueva)
+supabase/migrations/002_*.sql    Actualización para quienes ya tenían la v0.3
 src/
   types.ts                 Modelo de datos (Cuaderno → Hojas → Elementos)
-  db.ts                    Base de datos local (Dexie), cambios pendientes
-  lib/supabase.ts          Cliente de Supabase (esquema notebook)
-  lib/sync.ts              Motor de sincronización
-  lib/auth.ts              Sesión
-  components/Account.tsx   Login y estado de sincronización
-  lib/ink.ts               Conversión de trazos a SVG
-  lib/images.ts            Pegar/comprimir imágenes
+  db.ts                    Base local (Dexie), operaciones de cuadernos y hojas
+  lib/history.ts           Deshacer / rehacer
+  lib/geometry.ts          Figuras, reconocimiento de trazos, lazo y transformaciones
+  lib/math.ts              Fórmulas con KaTeX
+  lib/pdf.ts               Importar y exportar PDF
+  lib/search.ts            Búsqueda
+  lib/sync.ts              Sincronización (local primero + tiempo real)
+  lib/supabase.ts, auth.ts Cliente y sesión
   components/
     Library.tsx            Lista de cuadernos
-    NotebookView.tsx       Cuaderno: paso de hojas 3D, teclado, pegar
-    PageSurface.tsx        Una hoja: texto, lápiz, borrador, imágenes
-    Paper.tsx              Papel, perforaciones, espiral y portada
-    Toolbar.tsx            Barra de herramientas
+    NotebookView.tsx       Cuaderno: vistas, zoom, pasar hojas, teclado, pegar
+    Book.tsx               Las caras de las hojas en 3D y las pestañas
+    PageSurface.tsx        Una hoja con todas las herramientas
+    elements.tsx           Texto, notas, fórmulas, tarjetas, imágenes, selección
+    PagesPanel.tsx         Miniaturas, índice y separadores
+    Toolbar.tsx, Menu.tsx  Barra de herramientas y menús
+    SearchDialog, ExportDialog, NotebookSettings, Review, Account, Welcome
 ```
 
 ### Modelo de datos
 
 ```
-Notebook { id, title, color, lastPage, updatedAt, deleted }
-Page     { id, notebookId, order, updatedAt, deleted }
-Element  { id, pageId, type: text | image | ink, x, y, w, h, z, updatedAt, deleted, ... }
+Notebook { id, title, color, paper, coverAssetId, updatedAt, deleted }
+Page     { id, notebookId, order, paper, sectionTitle, sectionColor, updatedAt, deleted }
+Element  { id, pageId, type: text | image | ink | sticky | math | card, x, y, w, h, z, updatedAt, deleted, ... }
 Asset    { id, blob, mime }   ← las imágenes
 ```
 
@@ -104,9 +122,7 @@ Las coordenadas son de página (816 × 1056, proporción carta), así que el con
 
 ## Hoja de ruta
 
-1. ~~Sincronización entre dispositivos~~ ✅. Siguiente: Realtime, para ver los cambios de otro dispositivo al instante sin esperar los 20 s.
-2. ~~PWA instalable~~ ✅
-3. **Zoom y desplazamiento** con pellizco (clave en celular) y vista de dos páginas en pantallas anchas.
-4. Formato de texto (negrita, listas, títulos), herramienta lazo para mover trazos y deshacer/rehacer.
-5. Tipos de hoja (rayada, punteada, blanca), separadores, índice y búsqueda.
-6. Exportar un cuaderno a PDF.
+- Reconocimiento de escritura a mano para buscar también en lo escrito con lápiz.
+- Compartir un cuaderno (solo lectura) con un enlace.
+- Grabar audio de la clase sincronizado con las notas.
+- Más plantillas de hoja (Cornell, partituras, gráficos).

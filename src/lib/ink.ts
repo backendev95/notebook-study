@@ -16,14 +16,15 @@ function svgPathFromStroke(stroke: number[][]) {
 }
 
 /** Convierte los puntos capturados en un contorno suave (con presión si viene de un lápiz) */
-export function inkPath(el: Pick<InkElement, 'points' | 'size' | 'pen' | 'opacity'>, complete = true) {
+export function inkPath(el: Pick<InkElement, 'points' | 'size' | 'pen' | 'opacity' | 'shape'>, complete = true) {
   const marker = el.opacity < 1;
+  const uniform = marker || !!el.shape;
   const stroke = getStroke(el.points, {
     size: el.size,
-    thinning: marker ? 0 : el.pen ? 0.65 : 0.5,
-    smoothing: 0.55,
-    streamline: 0.45,
-    simulatePressure: !el.pen && !marker,
+    thinning: uniform ? 0 : el.pen ? 0.65 : 0.5,
+    smoothing: el.shape ? 0.2 : 0.55,
+    streamline: el.shape ? 0.1 : 0.45,
+    simulatePressure: !el.pen && !uniform,
     last: complete,
     start: { taper: 0, cap: true },
     end: { taper: 0, cap: true },
