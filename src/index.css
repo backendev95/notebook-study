@@ -367,6 +367,8 @@ button:disabled {
   border-color: var(--accent);
 }
 .paper-sample {
+  position: relative;
+  overflow: hidden;
   display: block;
   width: 40px;
   height: 52px;
@@ -701,20 +703,20 @@ button:disabled {
   overflow: hidden;
   contain: strict;
 }
-.paper-grid {
+.paper.paper-grid {
   background-image:
     linear-gradient(to right, var(--grid) var(--px, 1px), transparent var(--px, 1px)),
     linear-gradient(to bottom, var(--grid) var(--px, 1px), transparent var(--px, 1px));
   background-size: 24px 24px;
 }
 /* rayada: renglones cada 24 px (coinciden con el texto) y margen rojo */
-.paper-lined {
+.paper.paper-lined {
   background-image: linear-gradient(to bottom, transparent calc(24px - var(--px, 1px)), var(--rule) calc(24px - var(--px, 1px)));
   background-size: 100% 24px;
   background-position: 0 48px;
   background-repeat: repeat-y;
 }
-.paper-lined::after {
+.paper.paper-lined::after {
   content: '';
   position: absolute;
   top: 0;
@@ -723,13 +725,13 @@ button:disabled {
   border-left: calc(var(--px, 1px) * 1.5) solid rgba(220, 80, 80, 0.55);
   pointer-events: none;
 }
-.paper-lined.bind-left::after {
+.paper.paper-lined.bind-left::after {
   left: 96px;
 }
-.paper-lined.bind-right::after {
+.paper.paper-lined.bind-right::after {
   right: 96px;
 }
-.paper-dotted {
+.paper.paper-dotted {
   background-image: radial-gradient(circle, rgba(80, 110, 150, 0.55) calc(var(--px, 1px) * 1.2), transparent calc(var(--px, 1px) * 1.6));
   background-size: 24px 24px;
   background-position: -12px -12px;
