@@ -171,26 +171,91 @@ export function insideLasso(el: NoteElement, poly: Pt[]) {
   return pointInPolygon([el.x + el.w / 2, el.y + el.h / 2], poly);
 }
 
-// ---------- Mover / escalar varios elementos ----------
+// ---------- Mover / escalar / girar varios elementos ----------
 export interface Transform {
   ox: number; // origen de la escala
   oy: number;
-  s: number; // escala
+  s: number; // escala uniforme
   dx: number;
   dy: number;
+  sx?: number; // escala solo a lo ancho (negativo = voltear)
+  sy?: number; // escala solo a lo alto
+  rot?: number; // giro en radianes (solo trazos y figuras)
+  rcx?: number; // centro del giro
+  rcy?: number;
 }
 export const identity: Transform = { ox: 0, oy: 0, s: 1, dx: 0, dy: 0 };
 
+function mapper(t: Transform) {
+  const kx = t.s * (t.sx ?? 1);
+  const ky = t.s * (t.sy ?? 1);
+  const rot = t.rot ?? 0;
+  const cos = Math.cos(rot),
+    sin = Math.sin(rot);
+  const cx = t.rcx ?? 0,
+    cy = t.rcy ?? 0;
+  return (x: number, y: number): Pt => {
+    let X = t.ox + (x - t.ox) * kx;
+    let Y = t.oy + (y - t.oy) * ky;
+    if (rot) {
+      const rx = X - cx,
+        ry = Y - cy;
+      X = cx + rx * cos - ry * sin;
+      Y = cy + rx * sin + ry * cos;
+    }
+    return [X + t.dx, Y + t.dy];
+  };
+}
+
 export function transformElement<T extends NoteElement>(el: T, t: Transform): T {
-  const X = (x: number) => t.ox + (x - t.ox) * t.s + t.dx;
-  const Y = (y: number) => t.oy + (y - t.oy) * t.s + t.dy;
+  const map = mapper(t);
   if (el.type === 'ink') {
     const ink = el as InkElement;
-    const points = ink.points.map(([x, y, p]) => [X(x), Y(y), p] as P3);
+    const points = ink.points.map(([x, y, p]) => [...map(x, y), p] as P3);
     const size = ink.size * t.s;
-    return { ...el, points, size, ...inkBounds(points, size / 2) };
+    const ends = ink.ends ? ([...map(ink.ends[0], ink.ends[1]), ...map(ink.ends[2], ink.ends[3])] as InkElement['ends']) : undefined;
+    return { ...el, points, size, ends, ...inkBounds(points, size / 2) };
   }
-  return { ...el, x: X(el.x), y: Y(el.y), w: el.w * t.s, h: el.h * t.s };
+  // imágenes, textos, notas…: se mueven y escalan (no se giran)
+  const [x, y] = map(el.x, el.y);
+  return { ...el, x, y, w: el.w * t.s * Math.abs(t.sx ?? 1), h: el.h * t.s * Math.abs(t.sy ?? 1) };
+}
+
+/** Extremos de una línea o flecha (los guardados, o deducidos de sus puntos) */
+export function endsOf(ink: InkElement): [Pt, Pt] | null {
+  if (ink.shape !== 'line' && ink.shape !== 'arrow') return null;
+  if (ink.ends) return [[ink.ends[0], ink.ends[1]], [ink.ends[2], ink.ends[3]]];
+  const a = ink.points[0];
+  // en la flecha la punta es el punto más lejano al inicio
+  let tip = ink.points[ink.points.length - 1];
+  if (ink.shape === 'arrow') for (const p of ink.points) if (dist(p, a) > dist(tip, a)) tip = p;
+  return [
+    [a[0], a[1]],
+    [tip[0], tip[1]],
+  ];
+}
+
+/** Rehace una línea o flecha con extremos nuevos */
+export function withEnds(ink: InkElement, a: Pt, b: Pt): InkElement {
+  const points = shapePoints(ink.shape!, a, b);
+  return { ...ink, points, ends: [a[0], a[1], b[0], b[1]], ...inkBounds(points, ink.size / 2) };
+}
+
+/** Si el ángulo de a→b está cerca de un múltiplo de 45°, lo ajusta (alinear fácil) */
+export function snapEnd(a: Pt, b: Pt, tolDeg = 5): Pt {
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  const step = Math.PI / 4;
+  const snapped = Math.round(ang / step) * step;
+  if (Math.abs(ang - snapped) > (tolDeg * Math.PI) / 180) return b;
+  const len = dist(a, b);
+  return [a[0] + Math.cos(snapped) * len, a[1] + Math.sin(snapped) * len];
+}
+
+/** Ajusta un giro a múltiplos de 15° cuando está cerca */
+export function snapRotation(rad: number, tolDeg = 4) {
+  const step = Math.PI / 12;
+  const s = Math.round(rad / step) * step;
+  return Math.abs(rad - s) <= (tolDeg * Math.PI) / 180 ? s : rad;
 }
 
 export interface Box {

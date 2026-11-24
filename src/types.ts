@@ -64,6 +64,8 @@ export interface InkElement extends BaseElement {
   opacity: number; // < 1 para el resaltador
   pen: boolean; // true si se dibujó con lápiz (presión real)
   shape?: ShapeKind; // si es una figura limpia (trazo de grosor uniforme)
+  /** extremos de una línea o flecha [x1, y1, x2, y2] (para poder moverlos después) */
+  ends?: [number, number, number, number];
 }
 
 /** Nota adhesiva (post-it) */

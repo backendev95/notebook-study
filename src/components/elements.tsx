@@ -218,34 +218,77 @@ export const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
 
 // ---------- Recuadro de selección ----------
+type Act = { label: string; title: string; onClick: () => void; danger?: boolean; active?: boolean };
+
 export function SelectionOverlay({
   box,
   colors,
   onColor,
   actions,
+  actions2,
+  handles = { scale: true },
+  angleLabel,
 }: {
   box: { x: number; y: number; w: number; h: number };
   colors?: string[];
   onColor?: (c: string) => void;
-  actions: { label: string; title: string; onClick: () => void; danger?: boolean }[];
+  actions: Act[];
+  /** segunda fila (girar, voltear, grosor…) */
+  actions2?: Act[];
+  /** qué manijas mostrar: tamaño (esquina), ancho/alto (lados), girar y extremos de líneas */
+  handles?: { scale?: boolean; xy?: boolean; rotate?: boolean; ends?: [[number, number], [number, number]] };
+  angleLabel?: string;
 }) {
   const pad = 8;
-  const above = box.y > 70;
+  const above = box.y > 110;
+  const ox = box.x - pad;
+  const oy = box.y - pad;
+  const bar = (list: Act[]) =>
+    list.map((a) => (
+      <button
+        key={a.label}
+        className={`sel-btn${a.danger ? ' danger' : ''}${a.active ? ' active' : ''}`}
+        onClick={a.onClick}
+        title={a.title}
+      >
+        {a.label}
+      </button>
+    ));
   return (
     <div
-      className="selection-box"
-      style={{ left: box.x - pad, top: box.y - pad, width: box.w + pad * 2, height: box.h + pad * 2 }}
+      className={`selection-box${handles.rotate ? ' with-rot' : ''}`}
+      style={{ left: ox, top: oy, width: box.w + pad * 2, height: box.h + pad * 2 }}
     >
-      <div data-handle className="handle" />
+      {handles.scale && <div data-handle="scale" className="handle" title="Cambiar tamaño" />}
+      {handles.xy && (
+        <>
+          <div data-handle="x" className="handle side-x" title="Cambiar el ancho" />
+          <div data-handle="y" className="handle side-y" title="Cambiar el alto" />
+        </>
+      )}
+      {handles.rotate && (
+        <div data-handle="rot" className="rot-handle" title="Girar (se ajusta cada 15°)">
+          <span>↻</span>
+        </div>
+      )}
+      {handles.ends?.map(([x, y], i) => (
+        <div
+          key={i}
+          data-handle={`end${i}`}
+          className="handle end-handle"
+          style={{ left: x - ox, top: y - oy }}
+          title="Arrastra para cambiar el largo y la dirección"
+        />
+      ))}
+      {angleLabel && <div className="angle-label">{angleLabel}</div>}
       <div className={`selection-bar ${above ? 'above' : 'below'}`} data-action>
-        {colors?.map((c) => (
-          <button key={c} className="swatch small" style={{ background: c }} onClick={() => onColor?.(c)} title="Color" />
-        ))}
-        {actions.map((a) => (
-          <button key={a.label} className={`sel-btn${a.danger ? ' danger' : ''}`} onClick={a.onClick} title={a.title}>
-            {a.label}
-          </button>
-        ))}
+        <div className="sel-row">
+          {colors?.map((c) => (
+            <button key={c} className="swatch small" style={{ background: c }} onClick={() => onColor?.(c)} title="Color" />
+          ))}
+          {bar(actions)}
+        </div>
+        {actions2 && actions2.length > 0 && <div className="sel-row">{bar(actions2)}</div>}
       </div>
     </div>
   );

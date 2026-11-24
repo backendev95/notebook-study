@@ -7,12 +7,16 @@ import { inkBounds } from '../lib/ink';
 import { insertImage } from '../lib/images';
 import { cancelGestures, gestureBus, input, markPen } from '../lib/input';
 import {
+  endsOf,
   identity,
   insideLasso,
   recognize,
   shapePoints,
+  snapEnd,
+  snapRotation,
   transformElement,
   unionBox,
+  withEnds,
   type Box,
   type Pt,
   type Transform,
@@ -170,7 +174,12 @@ export const PageSurface = memo(function PageSurface({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lassoRef = useRef<Pt[] | null>(null);
   const erasing = useRef<Set<string> | null>(null);
-  const gesture = useRef<{ kind: 'move' | 'scale'; start: Pt; box: Box; moved: boolean } | null>(null);
+  type GestureKind = 'move' | 'scale' | 'x' | 'y' | 'rot' | 'end0' | 'end1';
+  const gesture = useRef<{ kind: GestureKind; start: Pt; box: Box; moved: boolean } | null>(null);
+  // arrastrar un extremo de una línea o flecha
+  const [endDrag, setEndDrag] = useState<InkElement | null>(null);
+  const endDragRef = useRef<InkElement | null>(null);
+  endDragRef.current = endDrag;
   const xfRef = useRef<Transform | null>(null);
   xfRef.current = xf;
   const elementsRef = useRef(elements);
@@ -187,7 +196,7 @@ export const PageSurface = memo(function PageSurface({
     }
   }, [editable]);
   useEffect(() => {
-    if (tool !== 'select' && tool !== 'lasso') setSelected([]);
+    if (tool !== 'select' && tool !== 'lasso' && tool !== 'shape') setSelected([]);
     if (tool !== 'select' && tool !== 'text' && tool !== 'sticky') setEditingId(null);
   }, [tool]);
 
@@ -201,6 +210,7 @@ export const PageSurface = memo(function PageSurface({
       setLasso(null);
       gesture.current = null;
       setXf(null);
+      setEndDrag(null);
       if (erasing.current) {
         erasing.current = null;
         setHidden(new Set());
@@ -311,6 +321,28 @@ export const PageSurface = memo(function PageSurface({
     return Math.max(120, limit - x);
   };
 
+  /** El trazo o figura que está bajo el punto (el de más arriba) */
+  const inkAt = (p: Pt) => {
+    const inks = elementsRef.current.filter((e): e is InkElement => e.type === 'ink');
+    for (let i = inks.length - 1; i >= 0; i--) {
+      const el = inks[i];
+      const reach = el.size / 2 + 10;
+      if (p[0] < el.x - reach || p[0] > el.x + el.w + reach || p[1] < el.y - reach || p[1] > el.y + el.h + reach) continue;
+      const pts = el.points;
+      for (let j = 0; j < pts.length; j++) {
+        const a = pts[j],
+          b = pts[Math.min(j + 1, pts.length - 1)];
+        // distancia al segmento a-b
+        const vx = b[0] - a[0],
+          vy = b[1] - a[1];
+        const len2 = vx * vx + vy * vy || 1;
+        const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / len2));
+        if (Math.hypot(a[0] + vx * t - p[0], a[1] + vy * t - p[1]) <= reach) return el;
+      }
+    }
+    return undefined;
+  };
+
   // ---------- borrador ----------
   const eraseAt = (p: Pt) => {
     const r = 10;
@@ -370,7 +402,11 @@ export const PageSurface = memo(function PageSurface({
     if (e.pointerType === 'touch' && input.penSeen && drawing) return;
 
     // mover / escalar lo seleccionado
-    if ((activeTool === 'select' || activeTool === 'lasso') && selectedRef.current.length && (onHandle || inSelection)) {
+    if (
+      (activeTool === 'select' || activeTool === 'lasso' || activeTool === 'shape') &&
+      selectedRef.current.length &&
+      (onHandle || inSelection)
+    ) {
       const box = selectionBox();
       const lockedOnly = elementsRef.current.some(
         (x) => selectedRef.current.includes(x.id) && x.type === 'image' && x.locked,
@@ -378,7 +414,8 @@ export const PageSurface = memo(function PageSurface({
       if (box && !lockedOnly) {
         e.preventDefault();
         surfaceRef.current!.setPointerCapture(e.pointerId);
-        gesture.current = { kind: onHandle ? 'scale' : 'move', start: p, box, moved: false };
+        const which = (target.closest<HTMLElement>('[data-handle]')?.dataset.handle || 'scale') as GestureKind;
+        gesture.current = { kind: onHandle ? which : 'move', start: p, box, moved: false };
       }
       return;
     }
@@ -413,6 +450,7 @@ export const PageSurface = memo(function PageSurface({
     if (activeTool === 'shape') {
       e.preventDefault();
       surfaceRef.current!.setPointerCapture(e.pointerId);
+      setSelected([]);
       shapeStart.current = p;
       const ink: InkElement = {
         id: uid(),
@@ -531,7 +569,16 @@ export const PageSurface = memo(function PageSurface({
       return;
     }
 
-    // Seleccionar
+    // Seleccionar (también trazos y figuras: basta tocarlos)
+    const inkHit = hit ? undefined : inkAt(p);
+    if (inkHit) {
+      e.preventDefault();
+      setSelected([inkHit.id]);
+      setEditingId(null);
+      surfaceRef.current!.setPointerCapture(e.pointerId);
+      gesture.current = { kind: 'move', start: p, box: inkHit, moved: false };
+      return;
+    }
     if (!hit) {
       setSelected([]);
       setEditingId(null);
@@ -555,8 +602,11 @@ export const PageSurface = memo(function PageSurface({
     if (!editable || (outside(e) && !liveRef.current && !gesture.current && !lassoRef.current && !erasing.current)) return;
     const ink = liveRef.current;
     if (ink && shapeStart.current) {
-      const p = toPage(e);
-      ink.points = shapePoints(ink.shape!, shapeStart.current, p);
+      const a = shapeStart.current;
+      let p = toPage(e);
+      if (ink.shape === 'line' || ink.shape === 'arrow') p = snapEnd(a, p); // se alinea sola cerca de 0°, 45°, 90°…
+      ink.points = shapePoints(ink.shape!, a, p);
+      ink.ends = [a[0], a[1], p[0], p[1]];
       setLive({ ...ink });
       return;
     }
@@ -579,6 +629,10 @@ export const PageSurface = memo(function PageSurface({
             snapped.current = true;
             cur.points = shape.points;
             cur.shape = shape.kind;
+            if (shape.kind === 'line') {
+              const [a, b] = [shape.points[0], shape.points[shape.points.length - 1]];
+              cur.ends = [a[0], a[1], b[0], b[1]];
+            }
             setLive({ ...cur });
           }
         }, 600);
@@ -605,10 +659,29 @@ export const PageSurface = memo(function PageSurface({
     const dy = p[1] - g.start[1];
     if (Math.abs(dx) + Math.abs(dy) > 2) g.moved = true;
     if (!g.moved) return;
+    const { box } = g;
+    const cx = box.x + box.w / 2,
+      cy = box.y + box.h / 2;
     if (g.kind === 'move') setXf({ ox: 0, oy: 0, s: 1, dx, dy });
-    else {
-      const s = Math.max(0.15, (g.box.w + dx) / g.box.w);
-      setXf({ ox: g.box.x, oy: g.box.y, s, dx: 0, dy: 0 });
+    else if (g.kind === 'scale') {
+      const s = Math.max(0.15, (box.w + dx) / box.w);
+      setXf({ ox: box.x, oy: box.y, s, dx: 0, dy: 0 });
+    } else if (g.kind === 'x') {
+      setXf({ ox: box.x, oy: box.y, s: 1, dx: 0, dy: 0, sx: Math.max(0.1, (box.w + dx) / Math.max(1, box.w)) });
+    } else if (g.kind === 'y') {
+      setXf({ ox: box.x, oy: box.y, s: 1, dx: 0, dy: 0, sy: Math.max(0.1, (box.h + dy) / Math.max(1, box.h)) });
+    } else if (g.kind === 'rot') {
+      const a0 = Math.atan2(g.start[1] - cy, g.start[0] - cx);
+      const a1 = Math.atan2(p[1] - cy, p[0] - cx);
+      setXf({ ox: 0, oy: 0, s: 1, dx: 0, dy: 0, rot: snapRotation(a1 - a0), rcx: cx, rcy: cy });
+    } else {
+      // extremo de una línea o flecha
+      const el = elementsRef.current.find((x) => x.id === selectedRef.current[0]);
+      const ends = el?.type === 'ink' ? endsOf(el) : null;
+      if (!el || el.type !== 'ink' || !ends) return;
+      const fixed = g.kind === 'end0' ? ends[1] : ends[0];
+      const moved = snapEnd(fixed, p);
+      setEndDrag(g.kind === 'end0' ? withEnds(el, moved, fixed) : withEnds(el, fixed, moved));
     }
   };
 
@@ -631,6 +704,8 @@ export const PageSurface = memo(function PageSurface({
       Object.assign(ink, inkBounds(ink.points, ink.size / 2), { z: 0, updatedAt: now() });
       setLive({ ...ink });
       await addElements([ink]);
+      // la figura recién dibujada queda seleccionada para ajustarla (tamaño, giro, extremos)
+      if (wasShapeTool) setSelected([ink.id]);
       return;
     }
     if (erasing.current) {
@@ -655,6 +730,17 @@ export const PageSurface = memo(function PageSurface({
     const g = gesture.current;
     gesture.current = null;
     const t = xfRef.current;
+    const ed = endDragRef.current;
+    if (g && g.moved && ed) {
+      const ts = now();
+      setOptimistic(new Map([[ed.id, { ...ed, updatedAt: ts }]]));
+      setEndDrag(null);
+      await updateElements([
+        { id: ed.id, changes: { points: ed.points, ends: ed.ends, x: ed.x, y: ed.y, w: ed.w, h: ed.h } },
+      ]);
+      return;
+    }
+    setEndDrag(null);
     if (g && g.moved && t) {
       const els = elementsRef.current.filter((x) => selectedRef.current.includes(x.id));
       const ts = now();
@@ -666,7 +752,7 @@ export const PageSurface = memo(function PageSurface({
           id: m.id,
           changes:
             m.type === 'ink'
-              ? { points: m.points, size: m.size, x: m.x, y: m.y, w: m.w, h: m.h }
+              ? { points: m.points, size: m.size, ends: m.ends, x: m.x, y: m.y, w: m.w, h: m.h }
               : { x: m.x, y: m.y, w: m.w, h: m.h },
         })),
       );
@@ -777,10 +863,11 @@ export const PageSurface = memo(function PageSurface({
     const list = elements
       .filter((e) => !hidden.has(e.id))
       .map((e) => optimistic?.get(e.id) ?? e)
-      .map((e) => (xf && selected.includes(e.id) ? transformElement(e, xf) : e));
+      .map((e) => (xf && selected.includes(e.id) ? transformElement(e, xf) : e))
+      .map((e) => (endDrag && e.id === endDrag.id ? endDrag : e));
     for (const p of pendingBoxes) if (!list.some((e) => e.id === p.id)) list.push(p);
     return list;
-  }, [elements, hidden, optimistic, xf, selected, pendingBoxes]);
+  }, [elements, hidden, optimistic, xf, selected, pendingBoxes, endDrag]);
 
   const papers = view.filter((e) => e.type === 'image' || e.type === 'sticky' || e.type === 'card').sort((a, b) => a.z - b.z);
   const inks = view.filter((e): e is InkElement => e.type === 'ink');
@@ -801,6 +888,75 @@ export const PageSurface = memo(function PageSurface({
   }
   const single = selEls.length === 1 ? selEls[0] : null;
   const allSticky = selEls.length > 0 && selEls.every((e) => e.type === 'sticky');
+  // solo trazos y figuras se pueden girar, voltear y estirar
+  const allInk = selEls.length > 0 && selEls.every((e) => e.type === 'ink');
+  const lineEnds = single?.type === 'ink' ? endsOf(single) : null;
+
+  /** Aplica de una vez un giro / volteo a lo seleccionado (botones) */
+  const applyNow = async (t: Transform) => {
+    const ts = now();
+    const els = elementsRef.current.filter((x) => selectedRef.current.includes(x.id));
+    const moved = els.map((el) => ({ ...transformElement(el, t), updatedAt: ts }) as NoteElement);
+    setOptimistic(new Map(moved.map((m) => [m.id, m])));
+    await updateElements(
+      moved.map((m) => ({
+        id: m.id,
+        changes: m.type === 'ink' ? { points: m.points, size: m.size, ends: m.ends, x: m.x, y: m.y, w: m.w, h: m.h } : { x: m.x, y: m.y },
+      })),
+    );
+  };
+  const around = (b: Box) => ({ cx: b.x + b.w / 2, cy: b.y + b.h / 2 });
+  const shapeActions: { label: string; title: string; onClick: () => void; active?: boolean }[] = [];
+  if (allInk && selBox) {
+    const { cx, cy } = around(selBox);
+    if (lineEnds && single?.type === 'ink') {
+      const [a, b] = lineEnds;
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const set = (na: Pt, nb: Pt) => {
+        const el = withEnds(single, na, nb);
+        setOptimistic(new Map([[el.id, { ...el, updatedAt: now() }]]));
+        updateElements([{ id: el.id, changes: { points: el.points, ends: el.ends, x: el.x, y: el.y, w: el.w, h: el.h } }]);
+      };
+      const dirX = b[0] >= a[0] ? 1 : -1;
+      const dirY = b[1] >= a[1] ? 1 : -1;
+      shapeActions.push(
+        { label: '— Horizontal', title: 'Dejarla totalmente horizontal', onClick: () => set([mid[0] - (dirX * len) / 2, mid[1]], [mid[0] + (dirX * len) / 2, mid[1]]) },
+        { label: '| Vertical', title: 'Dejarla totalmente vertical', onClick: () => set([mid[0], mid[1] - (dirY * len) / 2], [mid[0], mid[1] + (dirY * len) / 2]) },
+      );
+      if (single.shape === 'arrow') shapeActions.push({ label: '⇄ Invertir', title: 'Cambiar hacia dónde apunta', onClick: () => set(b, a) });
+    } else {
+      shapeActions.push(
+        { label: '↻ 90°', title: 'Girar 90°', onClick: () => applyNow({ ...identity, rot: Math.PI / 2, rcx: cx, rcy: cy }) },
+        { label: '⇋ Voltear', title: 'Voltear de izquierda a derecha', onClick: () => applyNow({ ...identity, ox: cx, oy: cy, sx: -1 }) },
+        { label: '⇵ Voltear', title: 'Voltear de arriba a abajo', onClick: () => applyNow({ ...identity, ox: cx, oy: cy, sy: -1 }) },
+      );
+    }
+    const sizes: [string, number][] = [
+      ['Fino', 2],
+      ['Medio', 3.5],
+      ['Grueso', 6],
+    ];
+    const cur = selEls.length === 1 && single?.type === 'ink' ? single.size : null;
+    for (const [label, size] of sizes)
+      shapeActions.push({
+        label,
+        title: `Grosor ${label.toLowerCase()}`,
+        active: cur !== null && Math.abs(cur - size) < 0.01,
+        onClick: () =>
+          updateElements(
+            selEls
+              .filter((e): e is InkElement => e.type === 'ink' && e.opacity === 1)
+              .map((e) => ({ id: e.id, changes: { size } })),
+          ),
+      });
+  }
+  const rotating = xf?.rot !== undefined && xf.rot !== 0;
+  const angleLabel = rotating ? `${Math.round((((xf!.rot! * 180) / Math.PI) % 360 + 360) % 360)}°` : endDrag && lineEnds ? (() => {
+    const e = endsOf(endDrag)!;
+    const deg = Math.round((((Math.atan2(e[1][1] - e[0][1], e[1][0] - e[0][0]) * 180) / Math.PI) % 360 + 360) % 360);
+    return `${deg}°`;
+  })() : undefined;
   const colorable = selEls.some((e) => ['ink', 'text', 'math', 'sticky'].includes(e.type));
 
   const selActions: { label: string; title: string; onClick: () => void; danger?: boolean }[] = [];
@@ -902,6 +1058,15 @@ export const PageSurface = memo(function PageSurface({
             )
           }
           actions={selActions}
+          actions2={shapeActions}
+          angleLabel={angleLabel}
+          handles={
+            lineEnds
+              ? { ends: lineEnds }
+              : allInk
+                ? { scale: true, xy: true, rotate: true }
+                : { scale: true }
+          }
         />
       )}
       <div className="page-number">{pageNumber}</div>
