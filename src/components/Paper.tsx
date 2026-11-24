@@ -50,14 +50,19 @@ export function Cover({ notebook, pageCount }: { notebook: Notebook; pageCount: 
     <div className={`cover${notebook.coverAssetId ? ' has-photo' : ''}`} style={{ ['--cover' as string]: notebook.color }}>
       {notebook.coverAssetId && <CoverPhoto assetId={notebook.coverAssetId} />}
       <Holes side="left" />
-      <div className="cover-label">
-        <div className="cover-brand">Notebook Study</div>
-        <div className="cover-title">{notebook.title}</div>
-        <div className="cover-meta">
-          {pageCount} {pageCount === 1 ? 'hoja' : 'hojas'}
-        </div>
-      </div>
-      <div className="cover-hint">Arrastra la esquina para abrir →</div>
+      {/* con foto, la portada se ve limpia y completa (el nombre está en la barra de arriba) */}
+      {!notebook.coverAssetId && (
+        <>
+          <div className="cover-label">
+            <div className="cover-brand">Notebook Study</div>
+            <div className="cover-title">{notebook.title}</div>
+            <div className="cover-meta">
+              {pageCount} {pageCount === 1 ? 'hoja' : 'hojas'}
+            </div>
+          </div>
+          <div className="cover-hint">Arrastra la esquina para abrir →</div>
+        </>
+      )}
     </div>
   );
 }

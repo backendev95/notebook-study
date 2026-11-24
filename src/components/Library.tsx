@@ -82,6 +82,10 @@ export function Library({
       <div className="shelf">
         {notebooks?.map((n) => (
           <div key={n.id} className="shelf-item">
+            {/* con foto de portada, el nombre va encima del cuaderno para no tapar la imagen */}
+            <div className={`shelf-title${n.coverAssetId ? '' : ' empty'}`} title={n.title}>
+              {n.title}
+            </div>
             <button
               className={`mini-notebook${n.coverAssetId ? ' has-photo' : ''}`}
               style={{ ['--cover' as string]: n.color }}
@@ -89,7 +93,7 @@ export function Library({
             >
               <CoverMini n={n} />
               <span className="mini-rings" />
-              <span className="mini-label">{n.title}</span>
+              {!n.coverAssetId && <span className="mini-label">{n.title}</span>}
             </button>
             <div className="shelf-meta">
               <span>{pageCounts?.[n.id] ?? 0} hojas</span>
@@ -121,6 +125,9 @@ export function Library({
         ))}
 
         <div className="shelf-item">
+          <div className="shelf-title empty" aria-hidden>
+            ·
+          </div>
           {creating ? (
             <form
               className="new-form"
