@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { inkPath } from '../lib/ink';
 import { useAssetUrl } from '../lib/images';
 import { hasMath, renderRichHtml, renderTex, useKatex } from '../lib/math';
+import { format, releaseEditor, setActiveEditor } from '../lib/textFormat';
 import type { CardElement, ImageElement, InkElement, MathElement, StickyElement, TextElement } from '../types';
 
 // ---------- Trazo ----------
@@ -66,6 +67,7 @@ export function EditableBox({
     if (!editing || !node) return;
     if (!unsaved.current) node.innerHTML = el.html; // al editar se ve el texto original
     node.focus();
+    setActiveEditor(node); // la barra muestra viñetas, alineación, negrita…
     const range = document.createRange();
     range.selectNodeContents(node);
     range.collapse(false);
@@ -75,7 +77,10 @@ export function EditableBox({
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saving = useRef(false);
+  // al desmontar, soltar el editor activo
+  useEffect(() => () => releaseEditor(ref.current), []);
   const finish = async () => {
+    releaseEditor(ref.current);
     // al salir de la caja puede llegar el aviso dos veces (perder el foco y dejar de editar): guardar una sola
     if (saving.current) return;
     const node = ref.current;
@@ -141,8 +146,21 @@ export function EditableBox({
         onPaste={onPaste}
         onKeyDown={(e) => {
           if (e.key === 'Escape') (e.target as HTMLElement).blur();
+          else if (e.key === 'Tab') {
+            // Tab / Shift+Tab: sub-viñeta o volver al nivel anterior
+            e.preventDefault();
+            if (e.shiftKey) format.outdent();
+            else format.indent();
+          } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '7') {
+            e.preventDefault();
+            format.numbers();
+          } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === '8') {
+            e.preventDefault();
+            format.bullets();
+          }
           e.stopPropagation();
         }}
+
       />
     </div>
   );
@@ -226,6 +244,7 @@ export function SelectionOverlay({
   onColor,
   actions,
   actions2,
+  actions3,
   handles = { scale: true },
   angleLabel,
 }: {
@@ -235,6 +254,8 @@ export function SelectionOverlay({
   actions: Act[];
   /** segunda fila (girar, voltear, grosor…) */
   actions2?: Act[];
+  /** tercera fila (alinear varios elementos) */
+  actions3?: Act[];
   /** qué manijas mostrar: tamaño (esquina), ancho/alto (lados), girar y extremos de líneas */
   handles?: { scale?: boolean; xy?: boolean; rotate?: boolean; ends?: [[number, number], [number, number]] };
   angleLabel?: string;
@@ -289,6 +310,12 @@ export function SelectionOverlay({
           {bar(actions)}
         </div>
         {actions2 && actions2.length > 0 && <div className="sel-row">{bar(actions2)}</div>}
+        {actions3 && actions3.length > 0 && (
+          <div className="sel-row">
+            <span className="sel-label">Alinear:</span>
+            {bar(actions3)}
+          </div>
+        )}
       </div>
     </div>
   );

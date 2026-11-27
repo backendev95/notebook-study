@@ -3,6 +3,117 @@ import type { ShapeKind, Tool } from '../types';
 import { SyncBadge } from './Account';
 import { Menu, MenuItem } from './Menu';
 import { INK_COLORS, MARKER_COLORS, STICKY_COLORS, type PenSettings } from './PageSurface';
+import { format, useTextFormat, type Align } from '../lib/textFormat';
+
+const F = (d: ReactNode) => <svg viewBox="0 0 24 24">{d}</svg>;
+const fmtIcons = {
+  bullets: F(
+    <>
+      <circle cx="5" cy="7" r="1.4" fill="currentColor" />
+      <circle cx="5" cy="12" r="1.4" fill="currentColor" />
+      <circle cx="5" cy="17" r="1.4" fill="currentColor" />
+      <path d="M9 7h11M9 12h11M9 17h11" />
+    </>,
+  ),
+  numbers: F(
+    <>
+      <path d="M4 5h1.5v4M4 9h3M4 14.5c0-1 2.8-1 2.8.4 0 1-2.8 2.1-2.8 3.1h3" />
+      <path d="M10 7h10M10 12h10M10 17h10" />
+    </>,
+  ),
+  checklist: F(
+    <>
+      <rect x="3" y="4.5" width="5" height="5" rx="1" />
+      <path d="M4 15.5l1.5 1.5 3-3.5" />
+      <path d="M11 7h9M11 16h9" />
+    </>,
+  ),
+  indent: F(<path d="M4 6h16M10 10h10M10 14h10M4 18h16M4 9.5l3 2.5-3 2.5" />),
+  outdent: F(<path d="M4 6h16M10 10h10M10 14h10M4 18h16M7 9.5L4 12l3 2.5" />),
+  left: F(<path d="M4 6h16M4 10h10M4 14h16M4 18h10" />),
+  center: F(<path d="M4 6h16M7 10h10M4 14h16M7 18h10" />),
+  right: F(<path d="M4 6h16M10 10h10M4 14h16M10 18h10" />),
+  justify: F(<path d="M4 6h16M4 10h16M4 14h16M4 18h16" />),
+  highlight: F(
+    <>
+      <path d="M5 21h7M9 17l-3 3M8 15l7-11 5 4-8 10zM8 15l4 3" />
+    </>,
+  ),
+};
+
+/** Fila de formato: aparece mientras escribes en un texto o una nota adhesiva */
+function FormatRow() {
+  const st = useTextFormat();
+  if (!st.active) return null;
+  // onPointerDown evita que el botón le quite el cursor a la caja de texto
+  const keep = (e: { preventDefault: () => void }) => e.preventDefault();
+  const B = ({ on, title, run, children }: { on?: boolean; title: string; run: () => void; children: ReactNode }) => (
+    <button
+      className={`tb-btn small fmt${on ? ' active' : ''}`}
+      title={title}
+      aria-label={title}
+      onPointerDown={keep}
+      onMouseDown={keep}
+      onClick={run}
+    >
+      {children}
+    </button>
+  );
+  const aligns: [Align, string][] = [
+    ['left', 'Alinear a la izquierda'],
+    ['center', 'Centrar'],
+    ['right', 'Alinear a la derecha'],
+    ['justify', 'Justificar'],
+  ];
+  return (
+    <>
+      <div className="tb-group">
+        <B on={st.ul} title="Viñetas (Ctrl+Shift+8)" run={format.bullets}>
+          {fmtIcons.bullets}
+        </B>
+        <B on={st.ol} title="Lista numerada (Ctrl+Shift+7)" run={format.numbers}>
+          {fmtIcons.numbers}
+        </B>
+        <B on={st.check} title="Lista de tareas (casillas para marcar)" run={format.checklist}>
+          {fmtIcons.checklist}
+        </B>
+        <B title="Quitar sangría (Shift+Tab)" run={format.outdent}>
+          {fmtIcons.outdent}
+        </B>
+        <B title="Sub-viñeta / sangría (Tab)" run={format.indent}>
+          {fmtIcons.indent}
+        </B>
+      </div>
+      <div className="tb-group">
+        {aligns.map(([a, title]) => (
+          <B key={a} on={st.align === a} title={title} run={() => format.align(a)}>
+            {fmtIcons[a]}
+          </B>
+        ))}
+      </div>
+      <div className="tb-group">
+        <B on={st.bold} title="Negrita (Ctrl+B)" run={format.bold}>
+          <b className="fmt-letter">B</b>
+        </B>
+        <B on={st.italic} title="Cursiva (Ctrl+I)" run={format.italic}>
+          <i className="fmt-letter">I</i>
+        </B>
+        <B on={st.underline} title="Subrayado (Ctrl+U)" run={format.underline}>
+          <u className="fmt-letter">U</u>
+        </B>
+        <B on={st.strike} title="Tachado" run={format.strike}>
+          <s className="fmt-letter">S</s>
+        </B>
+        <B title="Resaltar" run={format.highlight}>
+          {fmtIcons.highlight}
+        </B>
+        <B on={st.title} title="Título" run={format.title}>
+          <span className="fmt-letter">T</span>
+        </B>
+      </div>
+    </>
+  );
+}
 
 const SIZES = [2, 3.5, 6];
 
@@ -143,6 +254,7 @@ export function Toolbar(p: ToolbarProps) {
     );
   const showColors = ['pen', 'marker', 'shape', 'text', 'sticky', 'math'].includes(t);
   const insertActive = t === 'sticky' || t === 'math' || t === 'card';
+  const fmt = useTextFormat();
 
   return (
     <header className="toolbar">
@@ -286,7 +398,28 @@ export function Toolbar(p: ToolbarProps) {
         </div>
       </div>
 
-      {(showColors || hints[t]) && p.canWrite && (
+      {fmt.active && (
+        <div className="tb-row sub">
+          <FormatRow />
+          <div className="tb-group">
+            {INK_COLORS.map((c) => (
+              <button
+                key={c}
+                className="swatch"
+                style={{ background: c }}
+                title="Color del texto seleccionado"
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  document.execCommand('foreColor', false, c);
+                  document.activeElement?.dispatchEvent(new Event('input', { bubbles: true }));
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {!fmt.active && (showColors || hints[t]) && p.canWrite && (
         <div className="tb-row sub">
           {t === 'shape' &&
             (Object.keys(shapeLabels) as ShapeKind[]).map((k) => (

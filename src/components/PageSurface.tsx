@@ -6,6 +6,7 @@ import { addElements, deleteElements, updateElements } from '../lib/history';
 import { inkBounds } from '../lib/ink';
 import { insertImage } from '../lib/images';
 import { cancelGestures, gestureBus, input, markPen } from '../lib/input';
+import { checkboxAt, toggleCheck } from '../lib/textFormat';
 import {
   endsOf,
   identity,
@@ -396,6 +397,19 @@ export const PageSurface = memo(function PageSurface({
     const onHandle = !!target.closest('[data-handle]');
     const inSelection = !!target.closest('.selection-box');
     const p = toPage(e);
+
+    // tocar la casilla de una lista de tareas la marca o desmarca (con cualquier herramienta)
+    const box = checkboxAt(surfaceRef.current!, e.clientX, e.clientY);
+    const boxOwner = box?.closest<HTMLElement>('[data-el]');
+    if (box && boxOwner && !boxOwner.dataset.editing) {
+      const el = elementsRef.current.find((x) => x.id === boxOwner.dataset.el);
+      if (el && (el.type === 'text' || el.type === 'sticky')) {
+        e.preventDefault();
+        const index = [...boxOwner.querySelectorAll('ul.checklist > li')].indexOf(box);
+        await updateElements([{ id: el.id, changes: { html: toggleCheck(el.html, index) } }]);
+        return;
+      }
+    }
     const activeTool: Tool = e.pointerType === 'pen' && e.buttons & 32 ? 'eraser' : tool;
     const drawing = ['pen', 'marker', 'shape', 'eraser', 'lasso'].includes(activeTool);
     // con lápiz, el dedo no dibuja: sirve para desplazar la hoja
@@ -951,6 +965,42 @@ export const PageSurface = memo(function PageSurface({
           ),
       });
   }
+  // Alinear varios elementos entre sí (por sus bordes o centros)
+  const alignActions: { label: string; title: string; onClick: () => void }[] = [];
+  if (selEls.length >= 2 && selBox && !xf) {
+    const boxOf = (e: NoteElement): Box => {
+      if (e.type === 'text' || e.type === 'sticky') {
+        const node = surfaceRef.current?.querySelector<HTMLElement>(`[data-el="${e.id}"]`);
+        return { x: e.x, y: e.y, w: e.w, h: node?.offsetHeight ?? e.h };
+      }
+      return e;
+    };
+    const B = selBox;
+    const alignTo = (pick: (b: Box) => [number, number]) => async () => {
+      const ts = now();
+      const els = elementsRef.current.filter((x) => selectedRef.current.includes(x.id));
+      const moved = els.map((el) => {
+        const [dx, dy] = pick(boxOf(el));
+        return { ...transformElement(el, { ...identity, dx, dy }), updatedAt: ts } as NoteElement;
+      });
+      setOptimistic(new Map(moved.map((m) => [m.id, m])));
+      await updateElements(
+        moved.map((m) => ({
+          id: m.id,
+          changes: m.type === 'ink' ? { points: m.points, ends: m.ends, x: m.x, y: m.y, w: m.w, h: m.h } : { x: m.x, y: m.y },
+        })),
+      );
+    };
+    alignActions.push(
+      { label: '⇤ Izquierda', title: 'Alinear por el borde izquierdo', onClick: alignTo((b) => [B.x - b.x, 0]) },
+      { label: '↔ Centro', title: 'Centrar horizontalmente', onClick: alignTo((b) => [B.x + B.w / 2 - (b.x + b.w / 2), 0]) },
+      { label: 'Derecha ⇥', title: 'Alinear por el borde derecho', onClick: alignTo((b) => [B.x + B.w - (b.x + b.w), 0]) },
+      { label: '⤒ Arriba', title: 'Alinear por arriba', onClick: alignTo((b) => [0, B.y - b.y]) },
+      { label: '↕ Medio', title: 'Centrar verticalmente', onClick: alignTo((b) => [0, B.y + B.h / 2 - (b.y + b.h / 2)]) },
+      { label: 'Abajo ⤓', title: 'Alinear por abajo', onClick: alignTo((b) => [0, B.y + B.h - (b.y + b.h)]) },
+    );
+  }
+
   const rotating = xf?.rot !== undefined && xf.rot !== 0;
   const angleLabel = rotating ? `${Math.round((((xf!.rot! * 180) / Math.PI) % 360 + 360) % 360)}°` : endDrag && lineEnds ? (() => {
     const e = endsOf(endDrag)!;
@@ -1059,6 +1109,7 @@ export const PageSurface = memo(function PageSurface({
           }
           actions={selActions}
           actions2={shapeActions}
+          actions3={alignActions}
           angleLabel={angleLabel}
           handles={
             lineEnds

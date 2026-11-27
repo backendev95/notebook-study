@@ -1045,6 +1045,81 @@ button:disabled {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.fmt-letter {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1;
+}
+.tb-btn.active .fmt-letter {
+  color: white;
+}
+/* ---- viñetas, listas de tareas, títulos y alineación dentro de los textos ---- */
+.text-content ul,
+.text-content ol {
+  margin: 0;
+  padding-left: 26px;
+}
+.text-content li {
+  line-height: 24px;
+}
+.text-content ul ul {
+  list-style-type: circle;
+}
+.text-content ul ul ul {
+  list-style-type: square;
+}
+.text-content ol ol {
+  list-style-type: lower-alpha;
+}
+.text-content ul.checklist {
+  list-style: none;
+  padding-left: 28px;
+}
+.text-content ul.checklist > li {
+  position: relative;
+}
+.text-content ul.checklist > li::before {
+  content: '';
+  position: absolute;
+  left: -26px;
+  top: 3px;
+  width: 15px;
+  height: 15px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  opacity: 0.75;
+  cursor: pointer;
+}
+.text-content ul.checklist > li.done::before {
+  background: currentColor;
+  opacity: 0.9;
+}
+.text-content ul.checklist > li.done::after {
+  content: '';
+  position: absolute;
+  left: -21px;
+  top: 5px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.text-content ul.checklist > li.done {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.text-content h3 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 48px;
+  font-weight: 700;
+}
+.text-content b,
+.text-content strong {
+  font-weight: 700;
+}
 .text-content .katex {
   font-size: 1.05em;
 }
@@ -1210,6 +1285,12 @@ button:disabled {
   display: flex;
   gap: 4px;
   align-items: center;
+}
+.sel-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-muted);
+  padding: 0 4px;
 }
 .sel-btn.active {
   background: #dfe6fb;
