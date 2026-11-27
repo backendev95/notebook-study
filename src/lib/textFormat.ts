@@ -58,9 +58,19 @@ function read(): FormatState {
       return false;
     }
   };
-  const block = node?.closest('div, p, li, h3') as HTMLElement | null;
-  const alignSrc = (block && editor.contains(block) ? block : editor).style.textAlign || getComputedStyle(block ?? editor).textAlign;
-  const align: Align = alignSrc === 'center' || alignSrc === 'right' || alignSrc === 'justify' ? alignSrc : 'left';
+  // El párrafo donde está el cursor. Si el cursor quedó en el borde de la caja (por ejemplo
+  // al volver a editar, o con una sola línea), se mira el párrafo que tiene al lado,
+  // no la caja completa (que no tiene alineación propia).
+  let block = (node && node !== editor ? node.closest('li, h3, p, div') : null) as HTMLElement | null;
+  if (!block || block === editor || !editor.contains(block)) {
+    const sel = window.getSelection();
+    const kids = editor.children;
+    const off = sel?.anchorNode === editor ? sel.anchorOffset : kids.length;
+    block = ((kids[off - 1] ?? kids[off] ?? editor.lastElementChild) as HTMLElement | null) ?? editor;
+  }
+  const alignSrc = getComputedStyle(block).textAlign;
+  const align: Align =
+    alignSrc === 'center' ? 'center' : alignSrc === 'right' || alignSrc === 'end' ? 'right' : alignSrc === 'justify' ? 'justify' : 'left';
   return {
     active: true,
     bold: q('bold'),
